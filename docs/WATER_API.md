@@ -1,20 +1,34 @@
 # MIANU-SM IV — Water Order API (public)
 
-Order water delivery to a committee hall from any external system — a
+Order water delivery to a committee hall from any internal system — a
 dashboard, a Slack bot, a spreadsheet macro, anything that can POST JSON.
 
 **Base URL:** `https://mianu-public.karimshacker1234.workers.dev`
 
-**Authentication:** every request sends an API key as a bearer token:
+**Authentication:** none. The endpoint is unauthenticated because it runs
+inside the conference's closed network and is consumed only by internal
+systems. There is no key to obtain, rotate, store, or leak — the integration
+is just a POST.
 
-```
-Authorization: Bearer msk_live_8f3a...c1
+> If you ever expose this endpoint beyond the conference network, add auth
+> back before you do. There is no rate limit either, for the same reason.
+
+## Integration in 30 seconds
+
+1. Find the committee you are ordering for. You can use either its id or its
+   name — both work. Current committees: `GA`, `SOCHUM`, `HRC`, `UNSC`.
+2. POST to `/order` with `committee` and `quantity`.
+3. Keep the `ref` from the response. That is your only handle on the order
+   afterwards.
+
+```bash
+curl -X POST https://mianu-public.karimshacker1234.workers.dev/order \
+  -H "Content-Type: application/json" \
+  -d '{"committee": "UNSC", "quantity": 24, "note": "for the unmoderated caucus"}'
 ```
 
-Keys are issued by the MIANU-SM IV IT admin team. A key is scoped to
-`water.order` only — it cannot read or modify participant data, balances, or
-any other conference record. Keys can be rotated or revoked at any time; treat
-them as a secret and store them in a secret manager, never in client-side code.
+That is the whole integration. No headers to configure beyond `Content-Type`,
+no token to fetch first, no retry-on-auth-expiry logic to write.
 
 ## Place an order
 
@@ -22,38 +36,39 @@ them as a secret and store them in a secret manager, never in client-side code.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `committee` | string | yes | Committee **id** or committee **name** (e.g. `UNSC`, "Security Council") |
+| `committee` | string | yes | Committee **id** or committee **name** (e.g. `UNSC` or `GA`) |
 | `quantity` | integer | yes | Number of water units. Must be 1–200. |
 | `note` | string | no | Free text, max 500 characters |
+| `from` | string | no | Name of the calling system, so the kitchen knows who asked. Max 100 characters. |
 
 ### Request
 
 ```bash
 curl -X POST https://mianu-public.karimshacker1234.workers.dev/order \
-  -H "Authorization: Bearer $MIANU_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"committee": "UNSC", "quantity": 24, "note": "for the unmoderated caucus"}'
 ```
 
 ```python
-import os, requests
+import requests
 
-requests.post(
+resp = requests.post(
     "https://mianu-public.karimshacker1234.workers.dev/order",
-    headers={"Authorization": f"Bearer {os.environ['MIANU_API_KEY']}"},
-    json={"committee": "UNSC", "quantity": 24},
-).raise_for_status()
+    json={"committee": "UNSC", "quantity": 24, "from": "kitchen-display"},
+)
+resp.raise_for_status()
+order = resp.json()
+print(order["ref"])  # WO-7F3K
 ```
 
 ```javascript
-await fetch("https://mianu-public.karimshacker1234.workers.dev/order", {
+const res = await fetch("https://mianu-public.karimshacker1234.workers.dev/order", {
   method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.MIANU_API_KEY}`,
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ committee: "UNSC", quantity: 24 }),
 });
+const order = await res.json();
+console.log(order.ref); // WO-7F3K
 ```
 
 ### Response — `201 Created`
@@ -61,7 +76,7 @@ await fetch("https://mianu-public.karimshacker1234.workers.dev/order", {
 ```json
 {
   "ref": "WO-7F3K",
-  "committee": "Security Council",
+  "committee": "UNSC",
   "quantity": 24,
   "status": "RECEIVED",
   "createdAt": "2026-09-26T13:40:12.000Z"
@@ -77,8 +92,7 @@ order later.
 `GET /order/:ref`
 
 ```bash
-curl -H "Authorization: Bearer $MIANU_API_KEY" \
-  https://mianu-public.karimshacker1234.workers.dev/order/WO-7F3K
+curl https://mianu-public.karimshacker1234.workers.dev/order/WO-7F3K
 ```
 
 ```json
@@ -88,38 +102,36 @@ curl -H "Authorization: Bearer $MIANU_API_KEY" \
   "quantity": 24,
   "note": "for the unmoderated caucus",
   "status": "ACKNOWLEDGED",
-  "requester_system": "msk_live_8f3a",
+  "requester_system": "kitchen-display",
   "created_at": "2026-09-26T13:40:12.000Z"
 }
 ```
 
 Status moves `RECEIVED` → `ACKNOWLEDGED` → `DELIVERED` (or `CANCELLED`).
-You will also be able to register a webhook URL with your key to receive these
-transitions as POSTs (phase 5).
+Poll `GET /order/:ref` if you need to know when it lands; a webhook option is
+planned for phase 5.
 
 ## Errors
 
 | Status | `error` | Meaning |
 |---|---|---|
 | 400 | `bad_request` | Missing/invalid `committee` or `quantity` |
-| 401 | `unauthorized` | Missing or unknown key |
-| 403 | `insufficient_scope` | Key does not include `water.order` |
-| 404 | `unknown_committee` / `not_found` | Committee does not exist, or `ref` is not yours |
-| 429 | `rate_limited` | Over your key's hourly quota |
+| 404 | `unknown_committee` | `committee` matches no committee id or name |
+| 404 | `not_found` | No order with that `ref` |
 
-Errors always return JSON: `{"error": "rate_limited"}`.
+Errors always return JSON: `{"error": "unknown_committee"}`.
 
-## Rate limits
+## Committees
 
-Default **60 orders per hour per key**. Your limit is shown in the IT admin
-console when your key is issued. If you expect burst traffic (e.g. syncing a
-batch at once), ask for a raised quota rather than creating multiple keys.
+Orders resolve `committee` against the committee table by id *or* name, so
+either form works. The seeded set:
 
-## Sandbox
-
-A sandbox key (`msk_test_...`) runs against a staging database so you can
-integrate before the conference. Sandbox orders never reach a real organizer.
-Request one from the IT admin team.
+| id | name | hall |
+|---|---|---|
+| `c_ga` | `GA` | Hall 1 |
+| `c_sochum` | `SOCHUM` | Hall 2 |
+| `c_hrc` | `HRC` | Hall 3 |
+| `c_unsc` | `UNSC` | Hall 4 |
 
 ## Support
 

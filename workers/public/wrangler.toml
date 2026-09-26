@@ -12,5 +12,6 @@ database_id = "c0ddbf82-7b83-4fef-a8cb-86538d57fa72"
 binding = "MIANU_APP_KV"
 id = "fbc74d9439324e938de1246a0c9fdc03"
 
-# PUBLIC_API_KEY_SALT — set with `wrangler secret put`.
-# Keys are stored as SHA-256(key + salt) so a DB leak cannot forge calls.
+# No secrets: this endpoint is unauthenticated. It runs inside the conference's
+# closed network, so there is no key to obtain or leak. If it is ever exposed
+# beyond that network, reintroduce auth here first.

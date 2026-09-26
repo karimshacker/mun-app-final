@@ -51,16 +51,33 @@ To apply migrations to the deployed database instead: `pnpm db:migrate:remote`.
 
 ### Secrets
 
-Two secrets are required at runtime and are **not** in this repo — set them
-with `wrangler secret put` from the relevant worker directory:
+One secret is required at runtime and is **not** in this repo — set it with
+`wrangler secret put` from the api worker directory:
 
 ```bash
-cd workers/api      && printf '%s' '<random>' | wrangler secret put JWT_SECRET
-cd workers/public   && printf '%s' '<random>' | wrangler secret put PUBLIC_API_KEY_SALT
+cd workers/api && printf '%s' '<random>' | npx wrangler secret put JWT_SECRET
 ```
 
-`JWT_SECRET` signs access/refresh tokens; `PUBLIC_API_KEY_SALT` salts the
-SHA-256 hash of each public API key so a DB leak cannot forge an order.
+`JWT_SECRET` signs access/refresh tokens. Without it, `/api/auth/login` fails.
+
+The public water-order endpoint is **unauthenticated** by design — it runs
+inside the conference's closed network, so there is no key to manage. See
+[`docs/WATER_API.md`](./docs/WATER_API.md).
+
+### Seeded data
+
+The database ships with the three operational accounts and the four
+committees, applied via `wrangler d1 migrations apply --remote`:
+
+| Account | Role | Phone |
+|---|---|---|
+| Yacine Amrani | `HEAD` | `+213555000001` |
+| Sara Benali | `ORGANIZER` | `+213555000002` |
+| Mehdi Haddad | `IT_ADMIN` | `+213555000003` |
+
+PINs are stored as `SHA-256(pin:salt)` and were generated for the dry run;
+rotate them before the event. Committees: `GA` (Hall 1), `SOCHUM` (Hall 2),
+`HRC` (Hall 3), `UNSC` (Hall 4).
 
 ## Mobile apps
 
