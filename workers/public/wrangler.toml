@@ -1,0 +1,16 @@
+name = "mianu-public"
+main = "src/index.ts"
+compatibility_date = "2024-06-14"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mianu-app-db"
+database_id = "c0ddbf82-7b83-4fef-a8cb-86538d57fa72"
+
+[[kv_namespaces]]
+binding = "MIANU_APP_KV"
+id = "fbc74d9439324e938de1246a0c9fdc03"
+
+# PUBLIC_API_KEY_SALT — set with `wrangler secret put`.
+# Keys are stored as SHA-256(key + salt) so a DB leak cannot forge calls.

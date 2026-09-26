@@ -1,0 +1,24 @@
+{
+  "name": "@mianu/preview",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "shots": "rm -rf shots .preview && node run.mjs",
+    "audit": "node audit.mjs",
+    "content": "node content-check.mjs",
+    "test": "node run.mjs && node audit.mjs && node content-check.mjs"
+  },
+  "dependencies": {
+    "@mianu/types": "workspace:*",
+    "@mianu/ui": "workspace:*",
+    "@mianu/organizer": "workspace:*",
+    "@mianu/admin": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native-web": "0.19.13"
+  },
+  "devDependencies": {
+    "esbuild": "^0.17.19",
+    "typescript": "^5.4.0"
+  }
+}

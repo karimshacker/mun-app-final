@@ -1,0 +1,20 @@
+{
+  "name": "mianu-sm-iv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MIANU-SM IV — organizing team app (organizer app, IT admin app, Cloudflare backend)",
+  "scripts": {
+    "dev:api": "pnpm --filter @mianu/api dev",
+    "deploy:api": "pnpm --filter @mianu/api deploy",
+    "db:migrate": "wrangler d1 migrations apply mianu-app-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply mianu-app-db --remote",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

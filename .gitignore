@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js/
+
+# Builds
+dist/
+build/
+.expo/
+*.tsbuildinfo
+
+# Cloudflare
+.wrangler/
+.dev.vars
+.mf/
+
+# Env & secrets
+.env
+.env.local
+*.local
+
+# Native
+ios/
+android/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# UI preview harness: generated bundles and screenshots are build output
+packages/preview/.preview/
+packages/preview/shots/
+.test-bundle.mjs
