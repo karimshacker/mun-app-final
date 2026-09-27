@@ -133,9 +133,9 @@ iOS shows it only after Xcode has "seen" the device.)
 - API: the deployed worker `https://mianu-api.karimshacker1234.workers.dev`
   is baked into the JS bundle by `EXPO_PUBLIC_API_URL` at prebuild time —
   keep the env var set (see step 1)
-- Accounts (dry run): all PINs `424242`
-  - Organizer app: `+213555000001` (head) or `+213555000002` (organizer)
-  - Admin app: `+213555000003` (IT admin)
+- Accounts: staff phones and PINs are **private** — ask the conference IT
+  lead for the test account for your role. PINs are stored salted and
+  hashed; they are not committed anywhere in this repo.
 - **NFC test** (lanes B/C only): Scan tab → *Hold badge to scan* → tap a
   linked badge. On lane A the scan screen shows *"NFC is off. Turn it on in
   settings, or type the code on the badge"* — that is correct free-build

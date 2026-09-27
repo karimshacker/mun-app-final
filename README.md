@@ -67,22 +67,14 @@ inside the conference's closed network, so there is no key to manage. See
 
 ### Seeded data
 
-The database ships with the three operational accounts, the eight committees,
-and a five-participant demo roster, applied via `wrangler d1 migrations apply
---remote`:
-
-| Account | Role | Phone |
-|---|---|---|
-| Yacine Amrani | `HEAD` | `+213555000001` |
-| Sara Benali | `ORGANIZER` | `+213555000002` |
-| Mehdi Haddad | `IT_ADMIN` | `+213555000003` |
-
-Dry-run PIN for all three accounts: **`424242`** (set by migration `0007`,
-distinct salts, stored as `SHA-256(pin:salt)`). These are dry-run
-credentials — rotate to private PINs before the real event. Committees
-(migrations `0008` + `0010`): **one committee per hall** — `AG1` (Hall 1),
-`AG4` (Hall 2), `CS` (Hall 3), `CSH` (Hall 4), `AMS` (Hall 5), `HRC`
-(Hall 6), `CIJ` (Hall 7), `ECOSOC` (Hall 8).
+The database ships with the eight committees and a five-participant demo
+roster, applied via `wrangler d1 migrations apply --remote`. Staff accounts
+are provisioned separately (migration `0002` seeds the structure; real
+phones and PINs are **private** — they are not committed to this repo, and
+rotation is a one-line SQL update against `users.pin_hash`/`pin_salt`).
+Committees (migrations `0008` + `0010`): **one committee per hall** — `AG1`
+(Hall 1), `AG4` (Hall 2), `CS` (Hall 3), `CSH` (Hall 4), `AMS` (Hall 5),
+`HRC` (Hall 6), `CIJ` (Hall 7), `ECOSOC` (Hall 8).
 
 The demo roster (migration `0006`) has one participant per meal-plan branch,
 so every station receipt is reachable with no setup:

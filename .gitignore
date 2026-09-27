@@ -18,6 +18,8 @@ build/
 .env
 .env.local
 *.local
+# Staff PINs — generated out-of-band, never committed
+.staff-credentials.txt
 
 # Native
 ios/

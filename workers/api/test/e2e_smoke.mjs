@@ -259,6 +259,19 @@ ok('water order landed in the organizer inbox as a SYSTEM notice',
   inboxAfterWater.body.notifications?.some((n) => n.from === 'SYSTEM' && n.title.startsWith('Water for')),
   JSON.stringify(inboxAfterWater.body.notifications?.slice(0, 2)));
 
+console.log('public order tracking + health');
+const track = await fetch(`${PUB}/order/${waterOrder.ref}`);
+const tracked = await track.json().catch(() => ({}));
+// By this point the water block above has walked the order to DELIVERED —
+// the public tracking endpoint must reflect exactly that.
+ok('public order GET tracks status changes → DELIVERED', track.status === 200 && tracked.status === 'DELIVERED', JSON.stringify(tracked));
+const missing = await fetch(`${PUB}/order/WO-ZZZZ`);
+ok('unknown public ref → 404', missing.status === 404, String(missing.status));
+const apiHealth = await fetch(`${BASE}/health`);
+ok('api health ok', apiHealth.status === 200);
+const pubHealth = await fetch(`${PUB}/health`);
+ok('public health ok', pubHealth.status === 200);
+
 console.log('logout + session revocation');
 const out = await j('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refresh.body.refreshToken }) });
 ok('logout ok', out.status === 200);
