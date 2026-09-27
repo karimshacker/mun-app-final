@@ -83,10 +83,11 @@ The checks must print `OK: NFC entitlement present`.
 ## 2. Open in Xcode and configure signing
 
 1. Launch Xcode → **File ▸ Open…** → pick
-   `apps/organizer/ios/MianuOrganizer.xcworkspace`
-   (the **.xcworkspace**, not the `.xcodeproj` — pods live in the workspace)
+   `apps/organizer/ios/MIANUOrganizer.xcworkspace`
+   (created by the prebuild's pod install; the **.xcworkspace**, not the
+   `.xcodeproj` — pods live in the workspace)
 2. In the left Project navigator click the blue project icon
-   (**MianuOrganizer**) → select the **target** → **Signing & Capabilities**
+   (**MIANUOrganizer**) → select the **target** → **Signing & Capabilities**
 3. Tick **Automatically manage signing**
 4. **Team:** choose your team — the **Personal Team (your Apple ID)** on
    lane A, your **paid team** on lane B. First time: Xcode ▸ Settings ▸
@@ -96,7 +97,7 @@ The checks must print `OK: NFC entitlement present`.
    `tn.mianu.smiv.organizer.<yourname>` (and the admin equivalent
    `tn.mianu.smiv.admin.<yourname>`)
 6. Repeat 1–5 for the admin app
-   (`apps/admin/ios/MianuAdmin.xcworkspace`)
+   (`apps/admin/ios/MIANUITAdmin.xcworkspace`)
 
 > **Free-account limits:** one app per bundle id, max ~10 App IDs per week,
 > **max 3 devices per Apple ID**, installs expire after **7 days** (just
@@ -119,7 +120,7 @@ iOS shows it only after Xcode has "seen" the device.)
 ## 4. Build and run
 
 1. In Xcode's device menu (next to the scheme) select your **iPhone**
-2. Scheme **MianuOrganizer** → destination your iPhone → press **⌘R**
+2. Scheme **MIANUOrganizer** → destination your iPhone → press **⌘R**
 3. **First run will fail** with *"Untrusted developer"* — that is expected:
    - On the iPhone: **Settings ▸ General ▸ VPN & Device Management**
      (or **Profiles & Device Management**) → tap your Apple ID under

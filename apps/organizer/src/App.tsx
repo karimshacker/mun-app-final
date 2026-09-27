@@ -24,6 +24,7 @@ import { StationScreen, type StationChoice } from './screens/StationScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { InboxScreen } from './screens/InboxScreen';
 import { ChatScreen } from './screens/ChatScreen';
+import { BroadcastScreen } from './screens/BroadcastScreen';
 import { BoardScreen } from './screens/BoardScreen';
 
 type Tab = 'scan' | 'inbox' | 'chat' | 'board';
@@ -151,7 +152,7 @@ function SignedInShell({
           )
         )}
         {current.id === 'inbox' && <InboxScreen />}
-        {current.id === 'chat' && <ChatScreen myUserId={session.user.id} />}
+        {current.id === 'chat' && <CommsHub myUserId={session.user.id} />}
         {current.id === 'board' && <BoardScreen />}
       </View>
       <Rule />
@@ -173,9 +174,54 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
+/**
+ * The HEAD/DEPUTY comms tab: the two-way channel plus the one-way broadcast
+ * composer that feeds every organizer's inbox. Both share the tab; the
+ * switch is two words, no icons.
+ */
+function CommsHub({ myUserId }: { myUserId: string }) {
+  const [mode, setMode] = useState<'channel' | 'broadcast'>('channel');
+  return (
+    <View style={styles.comms}>
+      <View style={styles.commsSwitch}>
+        <CommsSwitchChip label="CHANNEL" active={mode === 'channel'} onPress={() => setMode('channel')} />
+        <CommsSwitchChip label="BROADCAST" active={mode === 'broadcast'} onPress={() => setMode('broadcast')} />
+      </View>
+      {mode === 'channel' ? <ChatScreen myUserId={myUserId} /> : <BroadcastScreen />}
+    </View>
+  );
+}
+
+function CommsSwitchChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={6} accessibilityRole="button">
+      <Text style={[styles.commsChip, active && styles.commsChipActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: ink.paper },
   stage: { flex: 1 },
+  comms: { flex: 1 },
+  commsSwitch: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    paddingTop: 12,
+    paddingHorizontal: layout.gutter,
+  },
+  commsChip: {
+    ...type.label,
+    fontSize: 11,
+    color: ink.ink,
+    borderWidth: 1,
+    borderColor: ink.rule,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    overflow: 'hidden',
+  },
+  commsChipActive: { backgroundColor: ink.ink, color: ink.inverse },
   tabs: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingTop: 10, minHeight: layout.touch },
   tabMark: { width: 28, height: 3, backgroundColor: ink.ink, marginBottom: 6 },

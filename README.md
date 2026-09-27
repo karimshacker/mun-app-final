@@ -147,7 +147,8 @@ For a native iPhone install via Xcode, see
 lanes: a **free Apple ID** (installs fine, but Apple bars personal teams from
 the NFC entitlement, so those builds fall back to typed alt codes) and a
 **paid account** (full NFC) — plus the 30-iPhone conference plan and the
-free full-NFC **Android station** route.
+free full-NFC **Android station** route. For over-the-air iOS distribution
+to testers (paid account), see **[docs/TESTFLIGHT_GUIDE.md](./docs/TESTFLIGHT_GUIDE.md)**.
 
 ### Running in Expo Go (iOS or Android)
 

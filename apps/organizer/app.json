@@ -4,13 +4,15 @@
     "slug": "mianu-organizer",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#FFFFFF",
     "ios": {
       "bundleIdentifier": "tn.mianu.smiv.organizer",
       "supportsTablet": false,
       "infoPlist": {
-        "NFCReaderUsageDescription": "MIANU badges carry an NFC chip. The app reads the chip to check badges in and out and to serve meals."
+        "NFCReaderUsageDescription": "MIANU badges carry an NFC chip. The app reads the chip to check badges in and out and to serve meals.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "com.apple.developer.nfc.readersession.formats": [
@@ -30,7 +32,10 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A0A"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-mono.png",
+        "backgroundColor": "#FFFFFF",
+        "legacyImage": "./assets/icon-legacy.png"
       }
     },
     "plugins": [
