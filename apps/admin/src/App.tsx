@@ -15,8 +15,9 @@ import { bindSessionPersistence, persistSession, restoreSession } from './lib/se
 import { LoginScreen } from './screens/LoginScreen';
 import { LinkBadgeScreen } from './screens/LinkBadgeScreen';
 import { TopUpScreen } from './screens/TopUpScreen';
+import { RosterScreen } from './screens/RosterScreen';
 
-type Tab = 'badges' | 'balance';
+type Tab = 'badges' | 'balance' | 'roster';
 
 export function App() {
   const [booted, setBooted] = useState(false);
@@ -87,7 +88,7 @@ function AppTabs({
   return (
     <View style={styles.shell}>
       <View style={styles.stage}>
-        {tab === 'badges' ? <LinkBadgeScreen /> : <TopUpScreen />}
+        {tab === 'badges' ? <LinkBadgeScreen /> : tab === 'balance' ? <TopUpScreen /> : <RosterScreen />}
       </View>
       <View style={styles.accountRow}>
         <Text style={styles.accountName} numberOfLines={1}>
@@ -99,6 +100,7 @@ function AppTabs({
       <View style={[styles.tabs, { paddingBottom: 8 + insets.bottom }]}>
         <TabButton label="Badges" active={tab === 'badges'} onPress={() => setTab('badges')} />
         <TabButton label="Balance" active={tab === 'balance'} onPress={() => setTab('balance')} />
+        <TabButton label="Roster" active={tab === 'roster'} onPress={() => setTab('roster')} />
       </View>
     </View>
   );

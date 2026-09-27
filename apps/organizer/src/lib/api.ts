@@ -21,6 +21,7 @@ import type {
   ScanRequest,
   ScanResult,
   AuthSession,
+  WaterOrder,
 } from '@mianu/types';
 
 /**
@@ -163,7 +164,20 @@ export const api = {
     }
   },
   setBreak: (onBreak: boolean) => rawApi.setBreak(onBreak),
-  registerPush: (subscription: unknown) => rawApi.registerPush(subscription),
+  waterOrders: async (): Promise<{ orders: WaterOrder[] }> => {
+    try {
+      return await rawApi.waterOrders();
+    } catch (e) {
+      throw classify(e);
+    }
+  },
+  setWaterStatus: async (ref: string, status: 'ACKNOWLEDGED' | 'DELIVERED' | 'CANCELLED') => {
+    try {
+      return await rawApi.setWaterStatus(ref, status);
+    } catch (e) {
+      throw classify(e);
+    }
+  },
 };
 
 export { classify };

@@ -137,6 +137,8 @@ export interface WaterOrder {
   status: 'RECEIVED' | 'ACKNOWLEDGED' | 'DELIVERED' | 'CANCELLED';
   requesterSystem: string;
   createdAt: string;
+  /** Committee display name, joined in by the staff list endpoint. */
+  committeeName?: string | null;
 }
 
 export interface AuthSession {

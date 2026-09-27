@@ -16,7 +16,8 @@ is just a POST.
 ## Integration in 30 seconds
 
 1. Find the committee you are ordering for. You can use either its id or its
-   name — both work. Current committees: `GA`, `SOCHUM`, `HRC`, `UNSC`.
+   name — both work. Current committees (one per hall): `AG1`, `AG4`, `CS`,
+   `CSH`, `AMS`, `HRC`, `CIJ`, `ECOSOC`.
 2. POST to `/order` with `committee` and `quantity`.
 3. Keep the `ref` from the response. That is your only handle on the order
    afterwards.
@@ -83,9 +84,10 @@ console.log(order.ref); // WO-7F3K
 }
 ```
 
-The order immediately appears on the committee's organizers' phones and on the
-head-of-organizers dashboard. Keep `ref` — it is the only way to query the
-order later.
+The order immediately appears in every staff member's inbox in the apps
+(one notice per person) and on the **WATER RUNS** tab, where head/deputy
+walk it RECEIVED → ACKNOWLEDGED → DELIVERED. Keep `ref` — it is the only way
+to query the order afterwards.
 
 ## Track an order
 
@@ -128,10 +130,14 @@ either form works. The seeded set:
 
 | id | name | hall |
 |---|---|---|
-| `c_ga` | `GA` | Hall 1 |
-| `c_sochum` | `SOCHUM` | Hall 2 |
-| `c_hrc` | `HRC` | Hall 3 |
-| `c_unsc` | `UNSC` | Hall 4 |
+| `c_ag1` | `AG1` | Hall 1 |
+| `c_ag4` | `AG4` | Hall 2 |
+| `c_cs` | `CS` | Hall 3 |
+| `c_csh` | `CSH` | Hall 4 |
+| `c_ams` | `AMS` | Hall 5 |
+| `c_hrc` | `HRC` | Hall 6 |
+| `c_cij` | `CIJ` | Hall 7 |
+| `c_ecosoc` | `ECOSOC` | Hall 8 |
 
 ## Support
 

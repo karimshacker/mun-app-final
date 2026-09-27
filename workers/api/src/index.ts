@@ -900,7 +900,7 @@ app.get('/api/notifications', allow(STAFF), async (c) => {
             u.name AS sender,
             r.read_at AS readAt
        FROM notifications n
-       JOIN users u ON u.id = n.sent_by
+       LEFT JOIN users u ON u.id = n.sent_by
        LEFT JOIN notification_receipts r
          ON r.notification_id = n.id AND r.user_id = ?1
       WHERE n.audience = 'ALL' OR n.audience = ?2 OR n.sent_by = ?1
@@ -910,8 +910,12 @@ app.get('/api/notifications', allow(STAFF), async (c) => {
     .bind(me, user.committee_id ?? '')
     .all();
 
-  // `sender` avoids the reserved word `from` in SQL; the client type wants `from`.
-  const notifications = (results as any[]).map(({ sender, ...rest }) => ({ ...rest, from: sender }));
+  // `sender` avoids the reserved word `from` in SQL; the client type wants
+  // `from`. System water orders have no user row, hence the fallback.
+  const notifications = (results as any[]).map(({ sender, ...rest }) => ({
+    ...rest,
+    from: sender ?? 'SYSTEM',
+  }));
   return c.json({ notifications });
 });
 
@@ -1138,18 +1142,59 @@ app.post('/api/me/break', allow(STAFF), async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Web Push registration — stores the subscription JSON on the user row so a
-// broadcast can reach a phone whose app is killed. Sending happens in the
-// notification fan-out once VAPID keys are provisioned.
+// Water orders — staff view of the public water endpoint's table. The venue
+// kitchen/ops systems POST to the unauthenticated public worker; staff here
+// see every recent order and walk it RECEIVED → ACKNOWLEDGED → DELIVERED
+// (or CANCELLED). The public worker stamps a notification receipt per staff
+// account on insert, so a new order also lands in every inbox.
 // ---------------------------------------------------------------------------
 
-app.post('/api/push/subscribe', allow(STAFF), async (c) => {
-  const body = await c.req.json<{ subscription?: unknown }>().catch(() => ({}) as { subscription?: unknown });
-  if (!body.subscription) return c.json({ error: 'bad_request' }, 400);
-  await c.env.DB.prepare('UPDATE users SET push_subscription = ? WHERE id = ?')
-    .bind(JSON.stringify(body.subscription), c.get('userId'))
-    .run();
-  return c.json({ ok: true });
+const WaterStatusSchema = z.object({
+  status: z.enum(['ACKNOWLEDGED', 'DELIVERED', 'CANCELLED']),
+});
+
+app.post(
+  '/api/water/:ref/status',
+  allow(['HEAD', 'DEPUTY']),
+  zValidator('json', WaterStatusSchema, (r, c) => (r.success ? undefined : c.json({ error: 'bad_request' }, 400))),
+  async (c) => {
+    const { status } = c.req.valid('json');
+    const ref = c.req.param('ref');
+    const order = await c.env.DB.prepare('SELECT ref, status FROM water_orders WHERE ref = ?')
+      .bind(ref)
+      .first<{ ref: string; status: string }>();
+    if (!order) return c.json({ error: 'not_found' }, 404);
+
+    // Invalid transitions are 409, not silent success — an operator tapping
+    // DELIVERED twice must not be told the second tap did something.
+    const allowed: Record<string, string[]> = {
+      RECEIVED: ['ACKNOWLEDGED', 'CANCELLED'],
+      ACKNOWLEDGED: ['DELIVERED', 'CANCELLED'],
+      DELIVERED: [],
+      CANCELLED: [],
+    };
+    if (!allowed[order.status]?.includes(status)) {
+      return c.json({ error: 'invalid_transition', from: order.status }, 409);
+    }
+
+    await c.env.DB.prepare('UPDATE water_orders SET status = ?, updated_at = ? WHERE ref = ?')
+      .bind(status, new Date().toISOString(), ref)
+      .run();
+    return c.json({ ok: true, ref, status });
+  },
+);
+
+app.get('/api/water', allow(STAFF), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT w.ref, w.committee_id AS committeeId, w.quantity, w.note,
+            w.status, w.requester_system AS requesterSystem, w.created_at AS createdAt,
+            pc.name AS committeeName
+       FROM water_orders w
+       LEFT JOIN committees pc ON pc.id = w.committee_id
+      ORDER BY w.created_at DESC
+      LIMIT 50`,
+  ).all();
+  return c.json({ orders: results });
 });
 
 // ---------------------------------------------------------------------------

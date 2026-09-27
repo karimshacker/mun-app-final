@@ -1,8 +1,17 @@
 /**
  * F4 — the head's dashboard, live from GET /api/board (organizer locations)
- * and GET /api/presence (participant hall occupancy). Position is derived,
- * never precise indoors: we show "IN HALL 3" or "MOVING · GPS", never
- * coordinates. Each organizer can go invisible with the BREAK toggle.
+ * and GET /api/presence (participant hall occupancy). Two sections:
+ *
+ *  - STAFF: each organizer's derived position — hall-level from their own
+ *    station scans, or a GPS fix while moving. Never coordinates.
+ *  - DELEGATES: every badge user currently checked into the conference, in
+ *    the hall their badge last checked into (real HALL_IN/HALL_OUT data —
+ *    the participant_presence table has no other writer). Delegates not yet
+ *    in a hall appear under NOT SEATED; the section header counts the
+ *    checked-in total.
+ *
+ * Each organizer can go invisible with the BREAK toggle on the station
+ * screen; delegates have no such flag — presence is what the badges did.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -60,6 +69,21 @@ export function BoardScreen() {
   const active = (people ?? []).filter((p) => !p.onBreak && resOf(p) !== 'OFF DUTY').length;
   const inBuilding = presence.length;
 
+  // Delegates grouped by the hall their badge is in, then the rest. The
+  // committee filter narrows delegates too, so the section answers the same
+  // question as the staff list above it.
+  const halls = useMemo(() => {
+    const map = new Map<string, PresenceRow[]>();
+    for (const r of presence) {
+      if (filter && r.committeeId !== filter) continue;
+      const key = r.hallName ?? 'NOT SEATED';
+      const list = map.get(key) ?? [];
+      list.push(r);
+      map.set(key, list);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [presence, filter]);
+
   return (
     <Screen scroll>
       <View style={styles.header}>
@@ -76,6 +100,8 @@ export function BoardScreen() {
       </View>
       <View style={styles.body}>
         {error ? <Text style={styles.meta}>{error}</Text> : null}
+
+        <EyebrowRow label="STAFF" hint="from station scans + GPS" />
         {shown.map((p) => {
           const res = resOf(p);
           const onDuty = !p.onBreak && res !== 'OFF DUTY';
@@ -108,8 +134,46 @@ export function BoardScreen() {
         {people && people.length === 0 && !error ? (
           <Text style={styles.meta}>No organizers on the roster yet.</Text>
         ) : null}
+
+        <EyebrowRow label="DELEGATES BY HALL" hint="live badge check-ins" />
+        {halls.map(([hall, rows]) => (
+          <View key={hall} style={styles.hallBlock}>
+            <View style={styles.hallHeader}>
+              <Text style={styles.hallName}>
+                {hall === 'NOT SEATED' ? 'NOT SEATED' : hall.toUpperCase()}
+              </Text>
+              <Text style={styles.hallCount}>{rows.length}</Text>
+            </View>
+            {rows.map((r) => (
+              <View key={r.participantId} style={styles.delegateRow}>
+                <View style={styles.delegateRule} />
+                <View style={styles.delegateBody}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.delegateName} numberOfLines={1}>
+                      {r.name}
+                    </Text>
+                    {r.committeeName ? <Text style={styles.delegateCommittee}>{r.committeeName}</Text> : null}
+                  </View>
+                  <Text style={styles.delegateSince}>in hall {ago(r.inHallSince)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ))}
+        {presence.length === 0 && !error ? (
+          <Text style={styles.meta}>No delegates checked in yet.</Text>
+        ) : null}
       </View>
     </Screen>
+  );
+}
+
+function EyebrowRow({ label, hint }: { label: string; hint: string }) {
+  return (
+    <View style={styles.sectionRow}>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      <Text style={styles.sectionHint}>{hint}</Text>
+    </View>
   );
 }
 
@@ -136,6 +200,15 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: ink.ink },
   chipText: { ...type.label, fontSize: 11, color: ink.ink },
   chipTextActive: { color: ink.inverse },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  sectionLabel: { ...type.label, fontSize: 12, color: ink.ink, letterSpacing: 1 },
+  sectionHint: { ...type.body, fontSize: 11, color: ink.fog },
   card: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   name: { ...type.name, color: ink.ink, flexShrink: 1 },
@@ -148,4 +221,19 @@ const styles = StyleSheet.create({
   meta: { ...type.body, fontSize: 12, color: ink.ash },
   metaBold: { ...type.body, fontSize: 12, color: ink.ink, fontWeight: '800' },
   metaDot: { ...type.body, fontSize: 12, color: ink.fog },
+  hallBlock: { marginTop: 8, marginBottom: 14 },
+  hallHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  hallName: { ...type.label, fontSize: 13, color: ink.ink, fontWeight: '800' },
+  hallCount: { ...type.label, fontSize: 13, color: ink.ash },
+  delegateRow: { flexDirection: 'row' },
+  delegateRule: { width: 3, backgroundColor: ink.ink, marginRight: 12 },
+  delegateBody: { flex: 1, paddingVertical: 10, gap: 3 },
+  delegateName: { ...type.body, fontSize: 15, fontWeight: '600', color: ink.ink, flexShrink: 1 },
+  delegateCommittee: { ...type.label, fontSize: 11, color: ink.ash },
+  delegateSince: { ...type.body, fontSize: 12, color: ink.ash },
 });

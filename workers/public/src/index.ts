@@ -58,16 +58,38 @@ app.post(
       .bind(ref, committee.id, body.quantity, body.note ?? null, body.from ?? 'external', now, now)
       .run();
 
-    // Phase 5: fan out to the committee's organizers and the head dashboard
-    // over the realtime Durable Object + Web Push.
+    // Fan-out: one notification + one receipt per staff member, so the order
+    // lands in every inbox (organizers' phones and the head's staff) without
+    // anyone polling. Same rows the API's broadcast route writes.
+    const id = crypto.randomUUID();
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `INSERT INTO notifications (id, sent_by, audience, title, body, at)
+         VALUES (?, NULL, ?, ?, ?, ?)`,
+      ).bind(
+        id,
+        'ALL',
+        `Water for ${committee.name}`,
+        `${body.quantity} units requested${body.from ? ` by ${body.from}` : ''}${body.note ? ` — ${body.note}` : ''}. Ref ${ref}.`,
+        now,
+      ),
+      c.env.DB.prepare(
+        `INSERT INTO notification_receipts (notification_id, user_id, delivered_at)
+         SELECT ?, id, ? FROM users`,
+      ).bind(id, now),
+    ]);
 
-    return c.json({
-      ref,
-      committee: committee.name,
-      quantity: body.quantity,
-      status: 'RECEIVED',
-      createdAt: now,
-    });
+    // 201 per docs/WATER_API.md — the caller keeps `ref` as the only handle.
+    return c.json(
+      {
+        ref,
+        committee: committee.name,
+        quantity: body.quantity,
+        status: 'RECEIVED',
+        createdAt: now,
+      },
+      201,
+    );
   },
 );
 

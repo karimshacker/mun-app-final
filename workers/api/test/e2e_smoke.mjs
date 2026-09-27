@@ -15,6 +15,10 @@
  * reset .wrangler/state for a fully deterministic run.
  */
 const BASE = 'http://127.0.0.1:8799';
+// The public worker runs alongside (port 8798) with --persist-to the same
+// local D1, so water orders created over the real public endpoint are
+// visible to the API — the production topology, minus the network.
+const PUB = 'http://127.0.0.1:8798';
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
   if (cond) { pass++; console.log(`  ok  ${name}`); }
@@ -223,6 +227,37 @@ const orgBroadcast = await j('/api/notifications', { method: 'POST', ...withO(),
 ok('organizer cannot broadcast', orgBroadcast.status === 403, String(orgBroadcast.status));
 const headTopup = await j('/api/admin/topup', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK2', amountCents: 100, reason: 'COMP' }) });
 ok('head denied admin topup', headTopup.status === 403, String(headTopup.status));
+
+console.log('water orders: public endpoint → staff loop');
+const orderRes = await fetch(`${PUB}/order`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ committee: 'c_cs', quantity: 12, note: 'e2e run', from: 'e2e-runner' }),
+});
+const waterOrder = await orderRes.json().catch(() => ({}));
+ok('public water order created', orderRes.status === 201 && typeof waterOrder.ref === 'string', JSON.stringify(waterOrder));
+
+const wList = await j('/api/water', withT());
+ok('staff water list shows the order', wList.status === 200 && wList.body.orders?.some((o) => o.ref === waterOrder.ref), JSON.stringify(wList.body));
+const wOrgList = await j('/api/water', withO());
+ok('organizer sees the water list too', wOrgList.status === 200 && Array.isArray(wOrgList.body.orders));
+const wAck = await j(`/api/water/${waterOrder.ref}/status`, { method: 'POST', ...withT(), body: JSON.stringify({ status: 'ACKNOWLEDGED' }) });
+ok('head acknowledges the order', wAck.status === 200, JSON.stringify(wAck.body));
+const wDel = await j(`/api/water/${waterOrder.ref}/status`, { method: 'POST', ...withT(), body: JSON.stringify({ status: 'DELIVERED' }) });
+ok('head marks it delivered', wDel.status === 200, JSON.stringify(wDel.body));
+const wAgain = await j(`/api/water/${waterOrder.ref}/status`, { method: 'POST', ...withT(), body: JSON.stringify({ status: 'DELIVERED' }) });
+ok('double-delivery rejected 409', wAgain.status === 409, JSON.stringify(wAgain.body));
+const wOrgSet = await j(`/api/water/${waterOrder.ref}/status`, { method: 'POST', ...withO(), body: JSON.stringify({ status: 'CANCELLED' }) });
+ok('organizer cannot change water status', wOrgSet.status === 403, String(wOrgSet.status));
+const wBad = await j('/api/water/WO-ZZZZ/status', { method: 'POST', ...withT(), body: JSON.stringify({ status: 'DELIVERED' }) });
+ok('unknown ref → 404', wBad.status === 404, JSON.stringify(wBad.body));
+
+// The public worker stamps a notification into every inbox on insert; the
+// sender is not a user, so this also proves the SYSTEM-sender fallback.
+const inboxAfterWater = await j('/api/notifications', withO());
+ok('water order landed in the organizer inbox as a SYSTEM notice',
+  inboxAfterWater.body.notifications?.some((n) => n.from === 'SYSTEM' && n.title.startsWith('Water for')),
+  JSON.stringify(inboxAfterWater.body.notifications?.slice(0, 2)));
 
 console.log('logout + session revocation');
 const out = await j('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refresh.body.refreshToken }) });

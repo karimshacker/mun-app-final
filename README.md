@@ -224,7 +224,11 @@ reset `.wrangler/state` for a fully deterministic run.
 2. **Meal traceability** — see [Meal entitlement](#meal-entitlement) below.
 3. **Notifications & chat** — one-way head → organizers; two-way head ↔ deputies.
 4. **Organizer location** — hybrid GPS + hall-level, shown on the head's dashboard.
-5. **Public water-order endpoint** — see [`docs/WATER_API.md`](./docs/WATER_API.md).
+5. **Water runs** — venue systems order water over the public endpoint
+   ([`docs/WATER_API.md`](./docs/WATER_API.md)); every staff phone gets a
+   SYSTEM notice instantly, the **Water** tab tracks all orders, and
+   head/deputy walk them RECEIVED → ACKNOWLEDGED → DELIVERED. IT also gets a
+   searchable roster of every delegate (plan, balance, badge status).
 
 ## Design language
 

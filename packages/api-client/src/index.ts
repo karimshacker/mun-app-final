@@ -21,6 +21,7 @@ import type {
   ScanRequest,
   ScanResult,
   User,
+  WaterOrder,
 } from '@mianu/types';
 
 const BASE = (process.env.EXPO_PUBLIC_API_URL as string) ?? 'http://localhost:8787';
@@ -272,13 +273,18 @@ class ApiClient {
     });
   }
 
-  // ------------------------------------------------------------------- push
+  // ------------------------------------------------------------------ water
 
-  /** Register this device's Web Push subscription for broadcast delivery. */
-  registerPush(subscription: unknown) {
-    return this.request<{ ok: true }>('/api/push/subscribe', {
+  /** Recent water orders, newest first — the staff "water runs" screen. */
+  waterOrders() {
+    return this.request<{ orders: WaterOrder[] }>('/api/water');
+  }
+
+  /** HEAD/DEPUTY: move an order along RECEIVED → ACKNOWLEDGED → DELIVERED. */
+  setWaterStatus(ref: string, status: 'ACKNOWLEDGED' | 'DELIVERED' | 'CANCELLED') {
+    return this.request<{ order: WaterOrder }>(`/api/water/${ref}/status`, {
       method: 'POST',
-      body: JSON.stringify({ subscription }),
+      body: JSON.stringify({ status }),
     });
   }
 }

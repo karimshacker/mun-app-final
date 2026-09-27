@@ -18,6 +18,8 @@ const EXPECT = {
   // Their data arrives from effects, which renderToString never fires — the
   // degraded/error copy is asserted by the api tests, not here.
   'organizer-inbox': ['INBOX', 'Loading…'],
+  'organizer-broadcast': ['BROADCAST', 'Audience', 'ALL STAFF', 'Title', 'Message'],
+  'organizer-water': ['WATER RUNS', 'Loading…'],
   'organizer-chat': ['HEAD ↔ DEPUTY', 'Message the head', 'Send'],
   'organizer-board': ['PRESENCE BOARD', 'Loading…'],
   'organizer-receipt': ['No balance left', 'Sami Benali', 'BALANCE 0'],
@@ -33,6 +35,7 @@ const EXPECT = {
   // step 1 of the enroll flow — the details form only appears after a chip read
   'admin-link': ['LINK BADGE', 'Hold badge to scan', 'Scan the chip, enter the delegate'],
   'admin-topup': ['BALANCE · TOP-UP', 'Amount', 'Commit top-up', 'Refund · complaint'],
+  'admin-roster': ['ROSTER', 'Search by name or alt code'],
 };
 
 let fail = 0;

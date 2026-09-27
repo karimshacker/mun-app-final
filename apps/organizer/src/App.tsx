@@ -26,13 +26,15 @@ import { InboxScreen } from './screens/InboxScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { BroadcastScreen } from './screens/BroadcastScreen';
 import { BoardScreen } from './screens/BoardScreen';
+import { WaterScreen } from './screens/WaterScreen';
 
-type Tab = 'scan' | 'inbox' | 'chat' | 'board';
+type Tab = 'scan' | 'inbox' | 'chat' | 'water' | 'board';
 
 const TABS: Array<{ id: Tab; label: string; roles: Role[] }> = [
   { id: 'scan', label: 'Scan', roles: ['HEAD', 'DEPUTY', 'ORGANIZER'] },
   { id: 'inbox', label: 'Inbox', roles: ['HEAD', 'DEPUTY', 'ORGANIZER'] },
   { id: 'chat', label: 'Comms', roles: ['HEAD', 'DEPUTY'] },
+  { id: 'water', label: 'Water', roles: ['HEAD', 'DEPUTY', 'ORGANIZER'] },
   { id: 'board', label: 'Board', roles: ['HEAD'] },
 ];
 
@@ -175,6 +177,9 @@ function SignedInShell({
         )}
         {current.id === 'inbox' && <InboxScreen />}
         {current.id === 'chat' && <CommsHub myUserId={session.user.id} />}
+        {current.id === 'water' && (
+          <WaterScreen canManage={role === 'HEAD' || role === 'DEPUTY'} />
+        )}
         {current.id === 'board' && <BoardScreen />}
       </View>
       <AccountStrip name={session.user.name} role={role} onSignOut={onSignOut} />
