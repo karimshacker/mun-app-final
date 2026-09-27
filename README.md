@@ -143,7 +143,9 @@ free full-NFC **Android station** route. For over-the-air iOS distribution
 to testers (paid account), see **[docs/TESTFLIGHT_GUIDE.md](./docs/TESTFLIGHT_GUIDE.md)**. No Mac? Follow
 **[docs/IOS_WINDOWS_TESTFLIGHT.md](./docs/IOS_WINDOWS_TESTFLIGHT.md)** (Windows) or
 **[docs/IOS_LINUX_TESTFLIGHT.md](./docs/IOS_LINUX_TESTFLIGHT.md)** (Linux):
-EAS cloud builds + TestFlight to 30 iPhones with NFC.
+EAS cloud builds + TestFlight to 30 iPhones with NFC. Prefer to skip the
+App Store Connect API key entirely and authenticate with just your Apple ID?
+Use **[docs/TESTFLIGHT_NO_API_KEY.md](./docs/TESTFLIGHT_NO_API_KEY.md)**.
 
 ### Running in Expo Go (iOS or Android)
 
