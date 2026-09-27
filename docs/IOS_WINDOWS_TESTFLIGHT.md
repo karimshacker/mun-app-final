@@ -40,8 +40,8 @@ cloud Macs) and **TestFlight** (Apple's over-the-air distribution).
    `.p8` file **once** — Apple never lets you download it again. Save all
    three values: Issuer ID, Key ID, the `.p8` file.
 3. Create the two app records: App Store Connect → Apps → **+** → New App
-   - *MIANU Organizer* — Bundle ID: `tn.mianu.smiv.organizer` — SKU: `mianu-organizer`
-   - *MIANU IT Admin* — Bundle ID: `tn.mianu.smiv.admin` — SKU: `mianu-admin`
+   - *MIANU Organizer* — Bundle ID: `com.mianu.paymentapp` — SKU: `com.mianu.paymentapp`
+   - *MIANU IT Admin* — Bundle ID: `com.mianu.paymentapp.admin` — SKU: `com.mianu.paymentapp.admin`
    (If the bundle IDs show as unavailable, someone registered them; create
    the records under those exact IDs — they are already in `app.json`.)
 
@@ -87,7 +87,7 @@ npx eas-cli credentials
 - When asked to log in to Apple, use the Apple ID of the **paid team**
   and complete two-factor authentication
 - Choose **"Generate new credentials"** — EAS creates the distribution
-  certificate and the provisioning profile for `tn.mianu.smiv.organizer`
+  certificate and the provisioning profile for `com.mianu.paymentapp`
   automatically
 
 Repeat from the `apps/admin` directory for the second app:
@@ -194,7 +194,7 @@ conference you're fine; rebuild + resubmit (steps 3–4) whenever it lapses.
 | Build succeeds, TestFlight shows *Missing Compliance* forever | Wait — processing takes 10–30 min; the encryption key in the plist auto-answers it |
 | `ITMS-90186` / invalid bundle (no app icon) | Regenerate icons: `bash packages/build/make-icons.sh` (or WSL), commit, rebuild |
 | `ITMS-91053` privacy-manifest email | Rebuild — `expo.ios.privacyManifests` is configured; if Apple names a specific API, add its category+reason to `app.json` and rebuild |
-| Upload rejected: bundle ID mismatch | The ASC record must be exactly `tn.mianu.smiv.organizer` / `tn.mianu.smiv.admin` (step 0.3) |
+| Upload rejected: bundle ID mismatch | The ASC record must be exactly `com.mianu.paymentapp` / `com.mianu.paymentapp.admin` (step 0.3) |
 | EAS quota exhausted | Wait for the monthly reset or subscribe to Starter |
 | App installs but shows *No connection* | Should not happen — the API URL comes from the EAS profile. If you built with a custom profile, add `env.EXPO_PUBLIC_API_URL` to it |
 | NFC does not react on a phone | iPhone XS or newer for background tag reads; hold the badge flat against the top edge; Settings ▸ General ▸ NFC must be on |

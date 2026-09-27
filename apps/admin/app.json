@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#FFFFFF",
     "ios": {
-      "bundleIdentifier": "tn.mianu.smiv.admin",
+      "bundleIdentifier": "com.mianu.paymentapp.admin",
       "supportsTablet": false,
       "infoPlist": {
         "NFCReaderUsageDescription": "Pre-printed MIANU badges carry an NFC chip. The app reads the chip to link it to a participant in the roster.",
@@ -49,7 +49,7 @@
       }
     },
     "android": {
-      "package": "tn.mianu.smiv.admin",
+      "package": "com.mianu.paymentapp.admin",
       "permissions": [
         "android.permission.NFC"
       ],

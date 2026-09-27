@@ -34,9 +34,10 @@ Do this once in a browser; every later release skips it.
    Agreements, Tax, and Banking. An unsigned agreement silently fails every
    upload with a confusing error (see troubleshooting).
 4. **Create the two app records** (App Store Connect → Apps → **+** → New App):
-   - Name `MIANU Organizer`, bundle ID `tn.mianu.smiv.organizer`
-   - Name `MIANU IT Admin`, bundle ID `tn.mianu.smiv.admin`
-   - Any SKU (e.g. `mianu-organizer`, `mianu-admin`), primary language as you like.
+   - Name `MIANU Organizer`, bundle ID `com.mianu.paymentapp`
+   - Name `MIANU IT Admin`, bundle ID `com.mianu.paymentapp.admin`
+   - SKU mirrors the bundle ID: `com.mianu.paymentapp` and
+     `com.mianu.paymentapp.admin`; primary language as you like.
    If the bundle IDs don't appear in the dropdown yet, that's fine — the
    first EAS build registers them (Step 3). Come back and create the records
    afterwards, before submitting.
@@ -186,7 +187,7 @@ a new agreement to sign.
 | `ERROR ITMS-90000 / duplicate build number` | The build number already exists in ASC. `eas build --platform ios --profile production` again — autoIncrement picks the next number; never reuse. |
 | Build stuck in *Processing* over an hour | Check App Store Connect → Apps → your app → TestFlight for an email from Apple; a processing stall almost always has an ITMS email explaining it. |
 | `Unable to authenticate` during **first** build's credential setup | That step is interactive Apple ID + 2FA by design — it cannot run with only env vars. Run it once in the terminal and it's stored. |
-| App name or bundle ID taken at Step 0.4 | Bundle IDs `tn.mianu.smiv.*` belong to this project — if unavailable, someone on the team already registered them; ask them for the App Store Connect access. |
+| App name or bundle ID taken at Step 0.4 | Bundle IDs `com.mianu.paymentapp(.admin)` belong to this project — if unavailable, someone on the team already registered them; ask them for the App Store Connect access. |
 | Submission logs time out mid-upload | Retry `eas submit --latest`; submissions are idempotent, and `eas submit:list` shows what's in flight. |
 
 ## Security notes

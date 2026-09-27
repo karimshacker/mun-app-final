@@ -34,9 +34,8 @@ Everything below is already configured — no changes needed to upload:
 1. Enroll at <https://developer.apple.com/programs> ($99/yr). Wait for
    activation (usually < 24 h).
 2. In **App Store Connect → Apps → +** create **two** app records:
-   - Name: *MIANU Organizer* — Bundle ID: `tn.mianu.smiv.organizer`
-   - Name: *MIANU IT Admin* — Bundle ID: `tn.mianu.smiv.admin`
-   (SKU can be `mianu-organizer` / `mianu-admin`; primary language any.)
+   - Name: *MIANU Organizer* — Bundle ID: `com.mianu.paymentapp` — SKU: `com.mianu.paymentapp`
+   - Name: *MIANU IT Admin* — Bundle ID: `com.mianu.paymentapp.admin` — SKU: `com.mianu.paymentapp.admin`
 3. In **Users and Access → Integrators → App Store Connect API**, generate an
    **API key** (Admin role): note the **Issuer ID**, **Key ID**, and download
    the `.p8` file. This lets EAS upload without your password.
@@ -124,7 +123,7 @@ pnpm ios:nfc-check -- --expect-nfc     # must print OK before continuing
 |---|---|
 | **ITMS-90186 / "invalid bundle — no app icon"** | `app.json` `icon` missing or has alpha — run `bash packages/build/make-icons.sh`, rebuild |
 | **ITMS-90534 / missing Info.plist property** | Re-run prebuild so `expo.json`/plist regenerate from `app.json` |
-| **"The bundle identifier cannot be changed"** | The App Store Connect record and the built app disagree — use `tn.mianu.smiv.organizer` / `tn.mianu.smiv.admin` exactly |
+| **"The bundle identifier cannot be changed"** | The App Store Connect record and the built app disagree — use `com.mianu.paymentapp` / `com.mianu.paymentapp.admin` exactly |
 | **Build number already used** | Bump the Build (Xcode) or let EAS autoIncrement handle it |
 | **"Personal development teams do not support NFC…"** | You are signing with a free team — TestFlight needs the paid team (section 0/2) |
 | **Export compliance asks every upload** | Confirm `ITSAppUsesNonExemptEncryption: false` survived in the built `Info.plist` (prebuild copies it from `app.json`) |
