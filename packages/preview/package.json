@@ -13,9 +13,9 @@
     "@mianu/ui": "workspace:*",
     "@mianu/organizer": "workspace:*",
     "@mianu/admin": "workspace:*",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-native-web": "0.19.13"
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
     "esbuild": "^0.17.19",

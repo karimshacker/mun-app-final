@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild src/index.ts --bundle --format=esm --outfile=.test-bundle.mjs --outbase=. >/dev/null 2>&1; node test/state_machine.test.mjs; status=$?; rm -f .test-bundle.mjs; exit $status"
+    "test": "esbuild src/index.ts --bundle --format=esm --outfile=.test-bundle.mjs --outbase=. >/dev/null 2>&1; node test/state_machine.test.mjs && node test/meal_grid.test.mjs; status=$?; rm -f .test-bundle.mjs; exit $status",
+    "test:e2e": "node test/e2e_smoke.mjs"
   },
   "dependencies": {
     "@mianu/types": "workspace:*",

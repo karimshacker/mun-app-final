@@ -1,6 +1,7 @@
 // Path is rewritten by the `test` script after esbuild bundles src/index.ts.
 // Run with: pnpm --filter @mianu/api test
-import { decideScan } from '../.test-bundle.mjs';
+import { stateMachine } from '../.test-bundle.mjs';
+const { decideScan } = stateMachine;
 
 // participants for the fixtures
 const P = (over = {}) => ({

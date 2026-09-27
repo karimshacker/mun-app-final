@@ -7,12 +7,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "react": "18.3.1",
-    "react-native": "0.74.5"
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
   },
   "devDependencies": {
-    "@types/react": "~18.3.0",
+    "@types/react": "~19.2.18",
     "typescript": "^5.4.0"
   }
 }

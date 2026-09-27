@@ -8,10 +8,11 @@
 import { build } from 'esbuild';
 import { renderToString } from 'react-dom/server';
 import React from 'react';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { SafeAreaProvider } from './safe-area-shim.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -21,9 +22,18 @@ const root = join(here, '..', '..');
 // lives here (it is a dev-time dependency of this preview package only), and
 // esbuild resolves the alias relative to nodePaths, not the entry file.
 const opts = {
-  alias: { 'react-native': 'react-native-web' },
+  alias: {
+    'react-native': 'react-native-web',
+    // The native safe-area package cannot load under Node; static renders
+    // have no insets anyway.
+    'react-native-safe-area-context': join(here, 'safe-area-shim.mjs'),
+  },
   bundle: true,
-  format: 'esm',
+  // CJS output: react-native-web's CJS interop calls require("react")
+  // dynamically, which ESM output turns into a runtime throw ("Dynamic
+  // require of react is not supported"). In CJS output external requires
+  // resolve natively under Node, so the whole problem class disappears.
+  format: 'cjs',
   jsxFactory: 'React.createElement',
   jsxFragment: 'React.Fragment',
   loader: { '.js': 'jsx' },
@@ -89,12 +99,27 @@ async function shot(name, html, osName) {
 }
 
 export async function render(name, entry, label) {
-  const outfile = join(here, '.preview', `${name}.mjs`);
+  const outfile = join(here, '.preview', `${name}.cjs`);
+  // Clear last run's shots first: if this render fails, content-check must
+  // report the shot as missing, not silently audit a stale file.
+  for (const osName of Object.keys(SIZES)) {
+    rmSync(join(here, 'shots', `${name}.${osName}.html`), { force: true });
+    rmSync(join(here, 'shots', `${name}.${osName}.png`), { force: true });
+  }
   await bundle(entry, outfile);
   const mod = await import(outfile);
-  const Component = mod.default ?? mod.App;
+  // Compiled-CJS from Node's ESM loader: mod.default is module.exports.
+  // Unwrap both possible shapes to the case's default export.
+  const exports = (mod.default ?? mod) ?? {};
+  const Component =
+    typeof exports === 'function' ? exports : (exports.default ?? exports.App);
   for (const osName of Object.keys(SIZES)) {
-    const body = renderToString(React.createElement(Component));
+    // Screens read safe-area insets (notch / home indicator); wrap in the
+    // provider so the hook resolves — web insets are zero, which is the
+    // correct flat rendering for a static audit.
+    const body = renderToString(
+      React.createElement(SafeAreaProvider, null, React.createElement(Component)),
+    );
     await shot(name, page(body, SIZES[osName].w, SIZES[osName].h, label), osName);
     console.log(`  ${name} · ${osName} ok`);
   }

@@ -1,87 +1,115 @@
 /**
- * F4 — the head's presence board. Hybrid positioning: GPS outdoors, hall
- * resolution from NFC scans indoors. A head does not need a map to act; a
- * sorted list of organizers with their current resolution is faster to triage
- * at a glance, so that is the primary surface and the map is secondary.
- *
- * Position is derived, never precise indoors: we show "IN HALL 3" or
- * "MOVING · GPS", never coordinates. Privacy is the default — there is a
- * per-organizer BREAK toggle and positions TTL after the conference.
+ * F4 — the head's dashboard, live from GET /api/board (organizer locations)
+ * and GET /api/presence (participant hall occupancy). Position is derived,
+ * never precise indoors: we show "IN HALL 3" or "MOVING · GPS", never
+ * coordinates. Each organizer can go invisible with the BREAK toggle.
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Eyebrow, ink, layout, Mono, Rule, type } from '@mianu/ui';
+import { Card, ink, layout, Screen, type } from '@mianu/ui';
+import { api } from '../lib/api';
+import type { BoardRow, PresenceRow } from '@mianu/types';
 
-interface OrganizerPos {
-  id: string;
-  name: string;
-  committee: string;
-  res: string;
-  source: 'GPS' | 'HALL_SCAN';
-  at: string;
-  onBreak: boolean;
+function ago(iso: string | null): string {
+  if (!iso) return '—';
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
 }
 
-const SEED: OrganizerPos[] = [
-  { id: 'o1', name: 'S. Benali', committee: 'GA', res: 'IN HALL 3', source: 'HALL_SCAN', at: '2 min ago', onBreak: false },
-  { id: 'o2', name: 'M. Haddad', committee: 'SOCHUM', res: 'MOVING · GPS', source: 'GPS', at: '6 min ago', onBreak: false },
-  { id: 'o3', name: 'L. Cherif', committee: 'HRC', res: 'IN HALL 1', source: 'HALL_SCAN', at: '11 min ago', onBreak: false },
-  { id: 'o4', name: 'A. Zeroual', committee: 'SC', res: 'BREAK', source: 'GPS', at: '24 min ago', onBreak: true },
-  { id: 'o5', name: 'R. Bouzid', committee: 'UNSC', res: 'OFF DUTY', source: 'GPS', at: '2 h ago', onBreak: false },
-];
+/** Human resolution line for one organizer row. */
+function resOf(p: BoardRow): string {
+  if (p.onBreak) return 'BREAK';
+  if (p.lastStation === 'HALL_IN' && p.lastHall) return `IN ${p.lastHall.toUpperCase()}`;
+  if (p.lat != null && p.lng != null) return 'MOVING · GPS';
+  if (p.lastStation === 'MEAL') return 'AT A MEAL STATION';
+  if (p.lastStation === 'HALL_OUT') return 'BETWEEN HALLS';
+  return 'OFF DUTY';
+}
 
 export function BoardScreen() {
-  const [people] = useState(SEED);
+  const [people, setPeople] = useState<BoardRow[] | null>(null);
+  const [presence, setPresence] = useState<PresenceRow[]>([]);
   const [filter, setFilter] = useState<string | null>(null);
-  const committees = [...new Set(people.map((p) => p.committee))];
-  const shown = filter ? people.filter((p) => p.committee === filter) : people;
-  const active = people.filter((p) => !p.onBreak && p.res !== 'OFF DUTY').length;
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [b, pr] = await Promise.all([api.board(), api.presence()]);
+      setPeople(b.rows);
+      setPresence(pr.rows);
+      setError(null);
+    } catch {
+      setError('Board unavailable. Check the connection.');
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 10_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const committees = useMemo(
+    () => [...new Set((people ?? []).map((p) => p.committeeId).filter((c): c is string => !!c))],
+    [people],
+  );
+  const shown = (people ?? []).filter((p) => !filter || p.committeeId === filter);
+  const active = (people ?? []).filter((p) => !p.onBreak && resOf(p) !== 'OFF DUTY').length;
+  const inBuilding = presence.length;
 
   return (
-    <View style={styles.screen}>
+    <Screen scroll>
       <View style={styles.header}>
         <Text style={styles.stationLabel}>PRESENCE BOARD</Text>
-        <Rule />
-      </View>
-      <View style={styles.body}>
         <Text style={styles.count}>
-          {active} on duty <Text style={styles.countRest}>of {people.length}</Text>
+          {people ? `${active} on duty · ${inBuilding} delegates in` : 'Loading…'}
         </Text>
-
         <View style={styles.filters}>
           <Chip label="All" active={filter === null} onPress={() => setFilter(null)} />
           {committees.map((c) => (
             <Chip key={c} label={c} active={filter === c} onPress={() => setFilter(c)} />
           ))}
         </View>
-
-        {shown.map((p) => (
-          <Card key={p.id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <Text style={styles.name} numberOfLines={1}>
-                {p.name}
-              </Text>
-              <Text style={styles.committee}>{p.committee}</Text>
-            </View>
-            <View style={styles.resRow}>
-              <View style={styles.resMark} />
-              <Text style={styles.res}>{p.res}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.meta}>{p.source === 'GPS' ? 'GPS' : 'HALL SCAN'}</Text>
-              <Text style={styles.metaDot}>·</Text>
-              <Text style={styles.meta}>{p.at}</Text>
-              {p.onBreak ? (
-                <>
-                  <Text style={styles.metaDot}>·</Text>
-                  <Text style={styles.metaBold}>ON BREAK</Text>
-                </>
-              ) : null}
-            </View>
-          </Card>
-        ))}
       </View>
-    </View>
+      <View style={styles.body}>
+        {error ? <Text style={styles.meta}>{error}</Text> : null}
+        {shown.map((p) => {
+          const res = resOf(p);
+          const onDuty = !p.onBreak && res !== 'OFF DUTY';
+          return (
+            <Card key={p.userId} style={styles.card}>
+              <View style={styles.cardTop}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {p.name}
+                </Text>
+                <Text style={styles.committee}>{p.committeeId ?? '—'}</Text>
+              </View>
+              <View style={styles.resRow}>
+                <View style={[styles.resMark, onDuty && styles.resMarkOn]} />
+                <Text style={styles.res}>{res}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Text style={styles.meta}>{p.source === 'GPS' ? 'GPS' : p.lastStation ? 'HALL SCAN' : 'NO SIGNAL'}</Text>
+                <Text style={styles.metaDot}>·</Text>
+                <Text style={styles.meta}>{ago(p.at)}</Text>
+                {p.onBreak ? (
+                  <>
+                    <Text style={styles.metaDot}>·</Text>
+                    <Text style={styles.metaBold}>ON BREAK</Text>
+                  </>
+                ) : null}
+              </View>
+            </Card>
+          );
+        })}
+        {people && people.length === 0 && !error ? (
+          <Text style={styles.meta}>No organizers on the roster yet.</Text>
+        ) : null}
+      </View>
+    </Screen>
   );
 }
 
@@ -99,13 +127,11 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: ink.paper },
   header: { paddingHorizontal: layout.gutter, paddingTop: layout.gutter, gap: 12 },
-  body: { flex: 1, paddingHorizontal: layout.gutter, paddingTop: 18 },
+  body: { paddingHorizontal: layout.gutter, paddingTop: 18, paddingBottom: 12 },
   stationLabel: { ...type.label, fontSize: 15, color: ink.ink },
-  count: { ...type.verdict, fontSize: 22, color: ink.ink, marginBottom: 16 },
-  countRest: { ...type.body, fontSize: 15, color: ink.ash, fontWeight: '400' },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
+  count: { ...type.verdict, fontSize: 18, color: ink.ink },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   chip: { borderWidth: 1, borderColor: ink.rule, paddingHorizontal: 12, paddingVertical: 7 },
   chipActive: { backgroundColor: ink.ink },
   chipText: { ...type.label, fontSize: 11, color: ink.ink },
@@ -116,6 +142,7 @@ const styles = StyleSheet.create({
   committee: { ...type.label, fontSize: 11, color: ink.ash },
   resRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   resMark: { width: 10, height: 10, borderWidth: 1, borderColor: ink.ink, backgroundColor: ink.paper },
+  resMarkOn: { backgroundColor: ink.ink },
   res: { ...type.label, fontSize: 13, color: ink.ink },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   meta: { ...type.body, fontSize: 12, color: ink.ash },

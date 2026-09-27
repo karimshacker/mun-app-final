@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "MIANU IT Admin",
+    "slug": "mianu-admin",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFFFFF",
+    "ios": {
+      "bundleIdentifier": "tn.mianu.smiv.admin",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NFCReaderUsageDescription": "Pre-printed MIANU badges carry an NFC chip. The app reads the chip to link it to a participant in the roster."
+      },
+      "entitlements": {
+        "com.apple.developer.nfc.readersession.formats": [
+          "NDEF",
+          "TAG"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:mianu-sm-iv.local"
+      ]
+    },
+    "android": {
+      "package": "tn.mianu.smiv.admin",
+      "permissions": [
+        "android.permission.NFC"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0A"
+      }
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 96,
+          "backgroundColor": "#FFFFFF"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e439ff4a-3a61-4d44-921d-9920d9fb4eed"
+      }
+    },
+    "owner": "karimshacker"
+  }
+}

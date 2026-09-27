@@ -1,0 +1,180 @@
+/**
+ * Local E2E smoke test against `wrangler dev` (D1 local, .dev.vars secret).
+ * Exercises: login → refresh → scan flow → badge linking → badge scan →
+ * notifications → chat → presence → board → location → logout revocation.
+ *
+ * Setup (from workers/api):
+ *   rm -rf .wrangler/state
+ *   npx wrangler d1 migrations apply mianu-app-db --local
+ *   npx wrangler d1 execute mianu-app-db --local --file test/fixtures/e2e_seed.sql -y
+ *   printf '%s' 'JWT_SECRET=local-smoke-secret' > .dev.vars
+ *   npx wrangler dev --port 8799 --local
+ *   node test/e2e_smoke.mjs
+ *
+ * The meal grid and scan state persist across runs against the same local DB;
+ * reset .wrangler/state for a fully deterministic run.
+ */
+const BASE = 'http://127.0.0.1:8799';
+let pass = 0, fail = 0;
+const ok = (name, cond, extra = '') => {
+  if (cond) { pass++; console.log(`  ok  ${name}`); }
+  else { fail++; console.log(`  ✗  ${name} ${extra}`); }
+};
+const j = async (path, opts = {}) => {
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers ?? {}) },
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+};
+const authed = (token) => (opts = {}) => ({ ...opts, headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${token}` } });
+
+console.log('auth');
+const login = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000001', pin: '424242' }) });
+ok('login 200', login.status === 200, JSON.stringify(login.body));
+ok('login returns user', login.body.user?.role === 'HEAD');
+const T = login.body.accessToken;
+const withT = authed(T);
+
+const badLogin = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000001', pin: '000000' }) });
+ok('wrong pin 401', badLogin.status === 401);
+
+const refresh = await j('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: login.body.refreshToken }) });
+ok('refresh 200', refresh.status === 200 && !!refresh.body.accessToken);
+
+console.log('committees + scan flow (alt code first, chip after linking)');
+const comms = await j('/api/committees', withT());
+ok('committees 200 with 8 rows, one hall each', comms.status === 200 && comms.body.committees?.length === 8 && new Set(comms.body.committees.map((c) => c.hallName)).size === 8, JSON.stringify(comms.body));
+
+console.log('free item (journal) — handed out before any meal today');
+// Journal: once per conference day, on any plan, never touching the meal
+// grid. Served BEFORE the first meal scan below, so meal1's "5 remaining"
+// assertion doubles as the guarantee that the journal consumed no meal slot.
+const jScan = (clientScanId) => j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'FREE_ITEM', clientScanId }) });
+const j1 = await jScan(`smoke-journal-d1-${Date.now()}`);
+ok('journal served', j1.body.outcome === 'ITEM_SERVED', JSON.stringify(j1.body));
+const j1again = await jScan(`smoke-journal-d1b-${Date.now()}`);
+ok('journal twice same day → ITEM_ALREADY_SERVED', j1again.body.outcome === 'ITEM_ALREADY_SERVED', JSON.stringify(j1again.body));
+
+const mealScanId = `smoke-meal-${Date.now()}`;
+const meal1 = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'MEAL', mealType: 'LUNCH', committeeId: 'c_ag1', clientScanId: mealScanId }) });
+ok('meal served, 5 remaining', meal1.body.outcome === 'MEAL_SERVED' && meal1.body.mealsRemaining === 5, JSON.stringify(meal1.body));
+const mealRetry = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'MEAL', mealType: 'LUNCH', committeeId: 'c_ga', clientScanId: mealScanId }) });
+ok('retried scan idempotent', mealRetry.body.outcome === 'MEAL_SERVED', JSON.stringify(mealRetry.body));
+const meal2 = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'MEAL', mealType: 'LUNCH', committeeId: 'c_ga', clientScanId: `smoke-meal2-${Date.now()}` }) });
+ok('second same-day lunch blocked', meal2.body.outcome === 'MEAL_ALREADY_SERVED', JSON.stringify(meal2.body));
+const zeroBal = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK2', stationType: 'MEAL', mealType: 'LUNCH', committeeId: 'c_cs', clientScanId: `smoke-zero-${Date.now()}` }) });
+ok('zero balance + wrong meal plan → MEAL_NOT_IN_PLAN', zeroBal.body.outcome === 'MEAL_NOT_IN_PLAN', JSON.stringify(zeroBal.body));
+
+// Regression: conference-wide meal lines send no committeeId — the app's
+// picker does this on purpose, so a MEAL scan must not require it.
+const mealNoCommittee = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'MEAL', mealType: 'BREAKFAST', clientScanId: `smoke-nocomm-${Date.now()}` }) });
+ok('meal scan without committeeId → MEAL_SERVED', mealNoCommittee.body.outcome === 'MEAL_SERVED', JSON.stringify(mealNoCommittee.body));
+
+// Halls are still scoped: a hall scan without a committee is a bad request.
+const hallNoCommittee = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_IN', clientScanId: `smoke-hallnocomm-${Date.now()}` }) });
+ok('hall scan without committeeId → 400', hallNoCommittee.status === 400, JSON.stringify(hallNoCommittee.body));
+
+const cin = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'CONFERENCE_IN', clientScanId: `smoke-in-${Date.now()}` }) });
+// Hall check-in for the committee whose hall SMK1's delegate sits in.
+ok('conference in via alt code → CHECKED_IN or ALREADY_IN', cin.body.outcome === 'CHECKED_IN' || cin.body.outcome === 'ALREADY_IN', JSON.stringify(cin.body));
+
+console.log('admin routes: roster, link, badge scan, topup');
+const adminLogin = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000003', pin: '424242' }) });
+ok('admin login', adminLogin.status === 200);
+const A = adminLogin.body.accessToken;
+const withA = authed(A);
+
+const search = await j('/api/admin/participants?q=Smoke', withA());
+ok('roster search finds both', search.status === 200 && search.body.participants?.length === 2, JSON.stringify(search.body));
+
+const link = await j('/api/admin/link-badge', { method: 'POST', ...withA(), body: JSON.stringify({ participantId: 'p_smoke1', badgeUid: '04a1b2c3', altCode: 'SMK1' }) });
+ok('link badge ok', link.status === 200 && link.body.ok === true, JSON.stringify(link.body));
+
+// Only after linking does the chip resolve — the exact production order. The
+// participant may already be in (or already out on a re-run); both are fine.
+const badgeIn = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ badgeUid: '04a1b2c3', stationType: 'CONFERENCE_OUT', clientScanId: `smoke-out-${Date.now()}` }) });
+ok('badge scan resolves after linking → CHECKED_OUT or ALREADY_OUT', badgeIn.body.outcome === 'CHECKED_OUT' || badgeIn.body.outcome === 'ALREADY_OUT', JSON.stringify(badgeIn.body));
+
+const dup = await j('/api/admin/link-badge', { method: 'POST', ...withA(), body: JSON.stringify({ participantId: 'p_smoke2', badgeUid: '04a1b2c3', altCode: 'SMK2' }) });
+ok('duplicate UID 409', dup.status === 409, JSON.stringify(dup.body));
+
+// Enrollment: scan a blank chip, submit details — participant created and
+// chip bound in one call. Conflict paths are hard stops.
+const enroll = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0001', name: 'Test Delegate', committeeId: 'c_ag4', altCode: 'TS01' }) });
+ok('enroll creates participant + links chip', enroll.status === 200 && enroll.body.ok === true && typeof enroll.body.participantId === 'string', JSON.stringify(enroll.body));
+const byNewUid = await j('/api/admin/lookup?badgeUid=04ee0001', withA());
+ok('enrolled chip resolves via lookup', byNewUid.status === 200 && byNewUid.body.participant?.name === 'Test Delegate', JSON.stringify(byNewUid.body));
+const dupEnroll = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0001', name: 'Test Delegate 2', committeeId: 'c_ag4', altCode: 'TS02' }) });
+ok('re-enrolling a linked chip → 409', dupEnroll.status === 409, JSON.stringify(dupEnroll.body));
+const dupCode = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0002', name: 'Test Delegate 3', committeeId: 'c_ag4', altCode: 'TS01' }) });
+ok('re-using a taken alt code → 409', dupCode.status === 409, JSON.stringify(dupCode.body));
+const badComm = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0003', name: 'Test Delegate 4', committeeId: 'c_nope', altCode: 'TS04' }) });
+ok('enroll with unknown committee → 400', badComm.status === 400, JSON.stringify(badComm.body));
+
+const topup = await j('/api/admin/topup', { method: 'POST', ...withA(), body: JSON.stringify({ altCode: 'SMK2', amountCents: 2500, reason: 'TOPUP' }) });
+ok('topup returns a balance number', topup.status === 200 && typeof topup.body.balanceCents === 'number', JSON.stringify(topup.body));
+
+// Regression: the Balance screen's tap-to-top-up resolves participants by
+// linked badge UID through the same lookup route.
+const byUid = await j('/api/admin/lookup?badgeUid=04a1b2c3', withA());
+ok('lookup by linked badge UID finds participant', byUid.status === 200 && byUid.body.participant?.id === 'p_smoke1', JSON.stringify(byUid.body));
+const byUnknownUid = await j('/api/admin/lookup?badgeUid=ffffffff', withA());
+ok('lookup by unlinked UID returns null', byUnknownUid.status === 200 && byUnknownUid.body.participant === null, JSON.stringify(byUnknownUid.body));
+const byBoth = await j('/api/admin/lookup?badgeUid=04a1b2c3&altCode=SMK1', withA());
+ok('lookup rejects two identifiers', byBoth.status === 400, JSON.stringify(byBoth.body));
+
+console.log('meal allowance integrity after the journal handout');
+// The precise per-day cap still holds after the journal went out: today's
+// lunch (served earlier) stays blocked — the journal neither reset nor
+// consumed anything on the meal grid.
+const capHeld = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'MEAL', mealType: 'LUNCH', clientScanId: `smoke-capheld-${Date.now()}` }) });
+ok('per-day meal cap holds after journal → MEAL_ALREADY_SERVED', capHeld.body.outcome === 'MEAL_ALREADY_SERVED', JSON.stringify(capHeld.body));
+
+console.log('notifications + chat');
+const note = await j('/api/notifications', { method: 'POST', ...withT(), body: JSON.stringify({ title: 'Smoke broadcast', body: 'Ignite the grills.', audience: 'ALL' }) });
+ok('broadcast created', note.status === 200, JSON.stringify(note.body));
+const inbox = await j('/api/notifications', withT());
+ok('inbox lists broadcast', inbox.body.notifications?.some((n) => n.title === 'Smoke broadcast'), JSON.stringify(inbox.body.notifications?.slice(0, 2)));
+const firstNote = inbox.body.notifications?.[0];
+ok('inbox rows carry sender name', !!firstNote?.from);
+const read = await j(`/api/notifications/${firstNote.id}/read`, { method: 'POST', ...withT() });
+ok('mark read ok', read.status === 200);
+
+const chat = await j('/api/chat', { method: 'POST', ...withT(), body: JSON.stringify({ body: 'smoke message' }) });
+ok('chat send', chat.status === 200 && chat.body.message?.body === 'smoke message');
+const chatGet = await j('/api/chat', withT());
+ok('chat history', chatGet.body.messages?.some((m) => m.body === 'smoke message'));
+
+console.log('presence + board + location');
+const orgLogin = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000002', pin: '424242' }) });
+ok('organizer login', orgLogin.status === 200);
+const O = orgLogin.body.accessToken;
+const withO = authed(O);
+
+// The earlier CONFERENCE_OUT scan removed the participant; bring them back and
+// put them in a hall so the board has something to show.
+await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'CONFERENCE_IN', clientScanId: `smoke-rein-${Date.now()}` }) });
+const hallIn = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_IN', committeeId: 'c_ag1', clientScanId: `smoke-hallin-${Date.now()}` }) });
+ok('hall check-in accepted', hallIn.body.outcome === 'CHECKED_IN', JSON.stringify(hallIn.body));
+
+const presence = await j('/api/presence', withT());
+ok('presence shows smoke participant in Hall 1', presence.body.rows?.some((r) => r.participantId === 'p_smoke1' && r.hallName === 'Hall 1'), JSON.stringify(presence.body.rows?.slice(0, 2)));
+
+const loc = await j('/api/location', { method: 'POST', ...withO(), body: JSON.stringify({ lat: 36.7538, lng: 3.0588 }) });
+ok('location ping ok', loc.status === 200);
+const board = await j('/api/board', withT());
+ok('board shows organizer with GPS fix', board.status === 200 && board.body.rows?.some((r) => r.userId === 'u_test_org' && r.lat !== null), JSON.stringify(board.body.rows?.slice(0, 3)));
+const brk = await j('/api/me/break', { method: 'POST', ...withO(), body: JSON.stringify({ onBreak: true }) });
+ok('break toggle ok', brk.status === 200);
+const board2 = await j('/api/board', withT());
+ok('board reflects break flag', board2.body.rows?.some((r) => r.userId === 'u_test_org' && r.onBreak === true), JSON.stringify(board2.body.rows?.slice(0, 3)));
+
+console.log('logout + session revocation');
+const out = await j('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refresh.body.refreshToken }) });
+ok('logout ok', out.status === 200);
+const afterOut = await j('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: refresh.body.refreshToken }) });
+ok('refresh revoked after logout', afterOut.status === 401, JSON.stringify(afterOut.body));
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

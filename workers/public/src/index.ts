@@ -17,6 +17,11 @@ interface Env {
   DB: D1Database;
 }
 
+// Inlined at build time via the Text rule in wrangler.toml — the repo's single
+// copy of the integration doc is what the endpoint serves.
+// @ts-expect-error virtual module provided by wrangler's build pipeline
+import waterApiDoc from '../../../docs/WATER_API.md';
+
 const app = new Hono<{ Bindings: Env }>();
 
 const ORDER_PREFIX = 'WO-';
@@ -86,6 +91,11 @@ app.get('/', (c) =>
     service: 'mianu-public',
     docs: 'https://mianu-public.karimshacker1234.workers.dev/docs/WATER_API.md',
   }),
+);
+
+/** Serve the integration README itself — PLAN.md promises it at the endpoint. */
+app.get('/docs/WATER_API.md', (c) =>
+  c.text(waterApiDoc, 200, { 'Content-Type': 'text/markdown; charset=utf-8' }),
 );
 
 export default app;

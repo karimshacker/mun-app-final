@@ -1,67 +1,101 @@
 /**
- * IT Admin app — link a pre-printed badge UID to a participant.
- *
- * The flow is deliberately strict because it is the one operation that makes a
- * physical object worth something: scan the chip, confirm the participant,
- * commit. Every step is a checkpoint with a single bottom action, and a
- * duplicate UID is a hard stop, not a prompt.
+ * IT Admin app — enrollment desk. Scan a blank badge, type the delegate's
+ * name, committee, and alt code; submit creates the participant and binds
+ * the chip in one atomic call (POST /api/admin/enroll). Steps are
+ * checkpoints: scan → details → done. Conflicts (chip already linked, alt
+ * code taken) are hard stops with the offending record named.
  */
-import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import NfcManager, { NfcTech } from 'react-native-nfc-manager';
+import { useEffect, useRef, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Action,
+  Card,
+  Eyebrow,
+  GhostLink,
+  ink,
+  layout,
+  Mono,
+  Rule,
+  Screen,
+  type,
+} from '@mianu/ui';
 import { api } from '../lib/api';
-import type { Participant } from '@mianu/types';
-import { Action, Card, Eyebrow, GhostLink, ink, layout, Mono, Rule, type } from '@mianu/ui';
+import {
+  readBadgeUid,
+  NfcUnavailableError,
+  NfcTimeoutError,
+  releaseNfc,
+} from '../lib/nfc';
+import type { CommitteeInfo } from '@mianu/types';
 
-type Step = 'scan' | 'code' | 'confirm' | 'done';
+type Step = 'scan' | 'details' | 'done';
 
 export function LinkBadgeScreen() {
   const [step, setStep] = useState<Step>('scan');
   const [uid, setUid] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [match, setMatch] = useState<Participant | null>(null);
+  const [name, setName] = useState('');
+  const [committeeId, setCommitteeId] = useState<string | null>(null);
+  const [committees, setCommittees] = useState<CommitteeInfo[] | null>(null);
+  const [altCode, setAltCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const nameRef = useRef<TextInput>(null);
+  const altRef = useRef<TextInput>(null);
+
+  // Committee options for the picker, loaded once the chip is read.
+  useEffect(() => {
+    if (step !== 'details' || committees) return;
+    api
+      .searchCommittees()
+      .then(setCommittees)
+      .catch(() => setCommittees([])); // offline: the picker shows a retry line
+  }, [step, committees]);
 
   const readTag = async () => {
     setError(null);
     setBusy(true);
     try {
-      await NfcManager.requestTechnology(NfcTech.Ndef);
-      const tag = await NfcManager.getTag();
-      const id = (tag?.id ?? '').toLowerCase();
-      if (!id) throw new Error('empty_tag');
-      setUid(id);
-      setStep('confirm');
-    } catch {
-      setError('Chip unreadable. Hold the badge flat, or type the code printed on it.');
+      const { uid: chipUid } = await readBadgeUid();
+      setUid(chipUid);
+      setStep('details');
+    } catch (e: any) {
+      if (e instanceof NfcTimeoutError) {
+        setError('No chip read. Hold the badge flat and try again.');
+      } else if (e instanceof NfcUnavailableError) {
+        setError(
+          'NFC is off or unavailable. Enrollment needs the chip — open the app in the EAS build, not Expo Go.',
+        );
+      } else {
+        setError('Chip unreadable. Hold the badge flat against the top of the phone.');
+      }
     } finally {
-      NfcManager.cancelTechnologyRequest();
+      await releaseNfc();
       setBusy(false);
     }
   };
 
-  const submitCode = () => {
-    setError(null);
-    const code = query.trim().toUpperCase();
-    if (code.length < 2) return;
-    setUid(`MANUAL:${code}`);
-    setStep('confirm');
-  };
-
-  const confirm = async () => {
-    if (!uid) return;
+  const enroll = async () => {
+    if (!uid || !committeeId) return;
     setBusy(true);
     setError(null);
     try {
-      await api.linkBadge({ participantId: match!.id, badgeUid: uid });
+      await api.enrollBadge({
+        badgeUid: uid,
+        name: name.trim(),
+        committeeId,
+        altCode: altCode.trim().toUpperCase(),
+      });
       setStep('done');
     } catch (e: any) {
-      setError(
-        /409|conflict/i.test(String(e?.message ?? ''))
-          ? 'That UID is already linked to another badge. Revoke it first.'
-          : 'Could not link. Check the connection and try once.',
-      );
+      if (e?.code === 'conflict') {
+        setError('That chip or alt code is already on the roster. Unlink it first, or type a new code.');
+      } else if (e?.code === 'not_found') {
+        setError('Committee not found — pick it from the list again.');
+      } else if (e?.code === 'offline') {
+        setError('No connection. Enrollment needs the server — find signal and retry.');
+      } else {
+        setError('Could not enroll. Check the connection and try once.');
+      }
     } finally {
       setBusy(false);
     }
@@ -70,75 +104,124 @@ export function LinkBadgeScreen() {
   const reset = () => {
     setStep('scan');
     setUid(null);
-    setQuery('');
-    setMatch(null);
+    setName('');
+    setCommitteeId(null);
+    setAltCode('');
     setError(null);
   };
 
   if (step === 'done') {
     return (
-      <View style={styles.screen}>
+      <Screen scroll>
         <Header label="LINK BADGE" />
         <View style={styles.body}>
           <View style={styles.verdictWrap}>
-            <Text style={styles.verdict}>Badge linked</Text>
-            <Text style={styles.kind}>ROSTER UPDATED</Text>
+            <Text style={styles.verdict}>Badge enrolled</Text>
+            <Text style={styles.kind}>ROSTER UPDATED · CHIP BOUND</Text>
           </View>
           <Card>
-            <Eyebrow>Participant</Eyebrow>
-            <Text style={styles.name}>{match?.name}</Text>
-            <Mono>{match?.altCode}</Mono>
+            <Eyebrow>Delegate</Eyebrow>
+            <Text style={styles.name}>{name.trim()}</Text>
             <View style={styles.facts}>
               <View style={styles.fact}>
-                <Text style={styles.factLabel}>UID</Text>
+                <Text style={styles.factLabel}>Alt code</Text>
+                <Mono>{altCode.trim().toUpperCase()}</Mono>
+              </View>
+              <View style={styles.fact}>
+                <Text style={styles.factLabel}>Chip UID</Text>
                 <Mono>{uid}</Mono>
               </View>
             </View>
           </Card>
           <View style={styles.stack}>
-            <Action label="Link the next badge" onPress={reset} testID="link-next" />
+            <Action label="Enroll the next badge" onPress={reset} testID="link-next" />
           </View>
         </View>
-      </View>
+      </Screen>
     );
   }
 
-  if (step === 'confirm') {
+  if (step === 'details') {
+    const ready = name.trim().length >= 2 && !!committeeId && altCode.trim().length >= 2 && !busy;
     return (
-      <View style={styles.screen}>
-        <Header label="LINK BADGE · CONFIRM" />
+      <Screen scroll>
+        <Header label="LINK BADGE · DETAILS" />
         <View style={styles.body}>
           <Card>
             <Eyebrow>Chip read</Eyebrow>
             <Mono>{uid}</Mono>
           </Card>
           <Card>
-            <Eyebrow>Link to participant</Eyebrow>
-            <Text style={styles.hint}>Type the participant's name or printed alt code.</Text>
+            <Eyebrow>Delegate details</Eyebrow>
+            <Text style={styles.fieldLabel}>Name</Text>
             <TextInput
+              ref={nameRef}
               style={styles.input}
-              autoFocus
-              autoCapitalize="none"
+              autoCapitalize="words"
               autoCorrect={false}
-              placeholder="Name or code"
+              placeholder="Full name"
               placeholderTextColor={ink.ash}
-              value={query}
-              onChangeText={(t) => {
-                setQuery(t);
-                setMatch({
-                  id: 'p1',
-                  name: t.trim() ? `${t.trim()} · draft` : 'S. Benali',
-                  committeeId: 'GA',
-                  badgeUid: null,
-                  altCode: 'A4F2',
-                  balanceCents: 5000,
-                  mealPlan: 'FULL',
-                  status: 'ACTIVE',
-                });
-              }}
+              value={name}
+              onChangeText={setName}
+              returnKeyType="next"
+              onSubmitEditing={() => altRef.current?.focus()}
+              submitBehavior="submit"
             />
+            <Text style={styles.fieldLabel}>Alt code</Text>
+            <TextInput
+              ref={altRef}
+              style={styles.input}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="A4F2"
+              placeholderTextColor={ink.ash}
+              value={altCode}
+              onChangeText={(t) => setAltCode(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              maxLength={12}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+            <Text style={styles.fieldLabel}>Committee</Text>
+            {committees === null ? (
+              <Text style={styles.hint}>Loading committees…</Text>
+            ) : committees.length === 0 ? (
+              <Text style={styles.hint}>Committee list unavailable. Check the connection and go back.</Text>
+            ) : (
+              <View style={styles.committeeWrap}>
+                {committees.map((c) => (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setCommitteeId(c.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={c.name}
+                    style={[styles.committeeChip, committeeId === c.id && styles.committeeChipActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.committeeChipText,
+                        committeeId === c.id && styles.committeeChipTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {c.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <Text style={styles.hint}>
+              New delegates start on the FULL meal plan with a 0.00 DZD balance — top up on the Balance tab.
+            </Text>
             <View style={styles.stack}>
-              <Action label={busy ? 'Linking…' : 'Confirm link'} disabled={!match || busy} onPress={confirm} testID="confirm-link" />
+              <Action
+                label={busy ? 'Enrolling…' : 'Create and link badge'}
+                disabled={!ready}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  enroll();
+                }}
+                testID="confirm-link"
+              />
             </View>
           </Card>
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -146,45 +229,32 @@ export function LinkBadgeScreen() {
             <GhostLink label="Cancel · start over" onPress={reset} />
           </View>
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.screen}>
+    <Screen scroll>
       <Header label="LINK BADGE" />
       <View style={styles.body}>
         <Card>
-          <Eyebrow>Pre-printed badge</Eyebrow>
-          <Text style={styles.hint}>Badges arrive with a fixed UID. Scan the chip to bind it to a participant.</Text>
+          <Eyebrow>Blank badge</Eyebrow>
+          <Text style={styles.hint}>
+            Scan the chip, enter the delegate's details, and the roster gets a new participant with the chip already
+            bound.
+          </Text>
           <View style={styles.stack}>
-            <Action label={busy ? 'Reading…' : 'Hold badge to scan'} disabled={busy} onPress={readTag} testID="admin-scan-nfc" />
-          </View>
-          <View style={styles.rowCenter}>
-            <GhostLink label="Chip is dead · Type code instead" onPress={() => { setStep('code'); setError(null); }} />
+            <Action
+              label={busy ? 'Reading…' : 'Hold badge to scan'}
+              disabled={busy}
+              onPress={readTag}
+              testID="admin-scan-nfc"
+            />
           </View>
         </Card>
-        {step === 'code' ? (
-          <Card>
-            <Eyebrow>Code on the badge</Eyebrow>
-            <TextInput
-              style={styles.input}
-              autoFocus
-              autoCapitalize="characters"
-              autoCorrect={false}
-              placeholder="A4F2"
-              placeholderTextColor={ink.ash}
-              value={query}
-              onChangeText={(t) => setQuery(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-            />
-            <View style={styles.stack}>
-              <Action label="Use this code" disabled={query.trim().length < 2} onPress={submitCode} testID="admin-submit-code" />
-            </View>
-          </Card>
-        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
-    </View>
+    </Screen>
   );
 }
 
@@ -198,30 +268,41 @@ function Header({ label }: { label: string }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: ink.paper },
   header: { paddingHorizontal: layout.gutter, paddingTop: layout.gutter, gap: 12 },
-  body: { flex: 1, paddingHorizontal: layout.gutter, paddingTop: 20, gap: 16, justifyContent: 'center' },
-  stationLabel: { ...type.label, fontSize: 15, color: ink.ink },
-  hint: { ...type.body, color: ink.ash, marginBottom: 14 },
-  verdictWrap: { gap: 8, marginBottom: 16 },
+  body: { paddingHorizontal: layout.gutter, paddingTop: 20, paddingBottom: 16, gap: 16 },
+  stationLabel: { ...type.label, fontSize: 13, color: ink.ink },
+  hint: { ...type.body, fontSize: 13, color: ink.ash, marginTop: 10 },
+  verdictWrap: { gap: 8, marginBottom: 8 },
   verdict: { ...type.verdict, color: ink.ink },
   kind: { ...type.label, fontSize: 12, color: ink.ash },
   name: { ...type.name, color: ink.ink, marginTop: 4, marginBottom: 6 },
-  facts: { gap: 12, marginTop: 14 },
+  facts: { flexDirection: 'row', gap: 28, marginTop: 14 },
   fact: { gap: 4 },
   factLabel: { ...type.label, fontSize: 11, color: ink.ash },
-  stack: { marginTop: 16, gap: 12 },
+  fieldLabel: { ...type.label, fontSize: 11, color: ink.ash, marginTop: 12, marginBottom: 6 },
   input: {
     borderWidth: layout.hair,
     borderColor: ink.rule,
     borderRadius: 4,
     backgroundColor: ink.paper,
-    padding: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     ...type.mono,
-    fontSize: 22,
-    letterSpacing: 6,
+    fontSize: 17,
+    letterSpacing: 2,
     color: ink.ink,
   },
-  rowCenter: { alignItems: 'center', marginTop: 14 },
+  committeeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  committeeChip: {
+    borderWidth: layout.hair,
+    borderColor: ink.rule,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  committeeChipActive: { backgroundColor: ink.ink },
+  committeeChipText: { ...type.label, fontSize: 12, color: ink.ink },
+  committeeChipTextActive: { color: ink.inverse },
+  stack: { marginTop: 16, gap: 12 },
+  rowCenter: { alignItems: 'center', marginTop: 4 },
   error: { ...type.body, color: ink.ink, textAlign: 'center', marginTop: 4, fontWeight: '600' },
 });

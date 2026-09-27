@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -9,10 +12,19 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@mianu/types": ["../../packages/types/src"],
-      "@mianu/ui": ["../../packages/ui/src"],
-      "@mianu/api-client": ["../../packages/api-client/src"]
+      "@mianu/types": [
+        "../../packages/types/src"
+      ],
+      "@mianu/ui": [
+        "../../packages/ui/src"
+      ],
+      "@mianu/api-client": [
+        "../../packages/api-client/src"
+      ]
     }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "extends": "expo/tsconfig.base"
 }

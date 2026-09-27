@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "MIANU Organizer",
+    "slug": "mianu-organizer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFFFFF",
+    "ios": {
+      "bundleIdentifier": "tn.mianu.smiv.organizer",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NFCReaderUsageDescription": "MIANU badges carry an NFC chip. The app reads the chip to check badges in and out and to serve meals."
+      },
+      "entitlements": {
+        "com.apple.developer.nfc.readersession.formats": [
+          "NDEF",
+          "TAG"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:mianu-sm-iv.local"
+      ]
+    },
+    "android": {
+      "package": "tn.mianu.smiv.organizer",
+      "permissions": [
+        "android.permission.NFC",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0A"
+      }
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Shows your position to the head of organizers while you are on duty.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 96,
+          "backgroundColor": "#FFFFFF"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9f2ee3a5-18e1-4e6e-8736-8e66f2633c1f"
+      }
+    },
+    "owner": "karimshacker"
+  }
+}

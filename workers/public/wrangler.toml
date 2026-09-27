@@ -3,15 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2024-06-14"
 compatibility_flags = ["nodejs_compat"]
 
+# The integration README is served by the worker itself (GET /docs/WATER_API.md),
+# so it is inlined at build time from the repo's single copy of the doc.
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = false
+
 [[d1_databases]]
 binding = "DB"
 database_name = "mianu-app-db"
 database_id = "c0ddbf82-7b83-4fef-a8cb-86538d57fa72"
-
-[[kv_namespaces]]
-binding = "MIANU_APP_KV"
-id = "fbc74d9439324e938de1246a0c9fdc03"
-
-# No secrets: this endpoint is unauthenticated. It runs inside the conference's
-# closed network, so there is no key to obtain or leak. If it is ever exposed
-# beyond that network, reintroduce auth here first.

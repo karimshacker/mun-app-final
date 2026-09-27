@@ -12,13 +12,26 @@ const shots = join(here, 'shots');
 
 // Must be present in BOTH the ios and android render.
 const EXPECT = {
-  'organizer-shell': ['Hold badge to scan', 'Type code instead', 'Scan'],
-  'organizer-inbox': ['INBOX', 'unread', 'Opening ceremony moved'],
+  'organizer-shell': ['MIANU-SM IV · ORGANIZER', 'Phone number', 'PIN', 'Sign in'],
+  'organizer-station': ['SELECT STATION', 'Conference', 'Meals', 'Free items', 'Halls', 'BREAKFAST LINES', 'LUNCH LINES', 'JOURNAL · ONE PER DAY', 'MAIN ENTRANCE · IN'],
+  // Live screens SSR their initial (pre-effect) state: header, not a blank.
+  // Their data arrives from effects, which renderToString never fires — the
+  // degraded/error copy is asserted by the api tests, not here.
+  'organizer-inbox': ['INBOX', 'Loading…'],
   'organizer-chat': ['HEAD ↔ DEPUTY', 'Message the head', 'Send'],
-  'organizer-board': ['PRESENCE BOARD', 'on duty', 'IN HALL 3', 'ON BREAK'],
+  'organizer-board': ['PRESENCE BOARD', 'Loading…'],
   'organizer-receipt': ['No balance left', 'Sami Benali', 'BALANCE 0'],
-  // step 1 of the link flow — 'Confirm link' only appears after a chip read
-  'admin-link': ['LINK BADGE', 'Hold badge to scan', 'Type code instead'],
+  'organizer-grid-receipts': [
+    // the exhausted receipt: inverted, and the tag counts the plan's allowance
+    'Plan used up',
+    '6 OF 6 USED',
+    // the day-closed receipt: hold tone, allowance tag does not apply here
+    'Not serving now',
+    'OUTSIDE THE GRID',
+    'Meals left on this plan',
+  ],
+  // step 1 of the enroll flow — the details form only appears after a chip read
+  'admin-link': ['LINK BADGE', 'Hold badge to scan', 'Scan the chip, enter the delegate'],
   'admin-topup': ['BALANCE · TOP-UP', 'Amount', 'Commit top-up', 'Refund · complaint'],
 };
 

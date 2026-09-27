@@ -2,10 +2,9 @@
  * Shared monochrome primitives. Used by the organizer and IT admin apps so
  * both ships of the design are literally the same components.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ink, layout, radii, type } from './theme';
-
-type PressableProps = React.ComponentProps<typeof Pressable>;
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ink, layout, type } from './theme';
 
 /** A hairline card — the basic surface of every screen. */
 export function Card({ children, style }: { children: React.ReactNode; style?: any }) {
@@ -15,6 +14,41 @@ export function Card({ children, style }: { children: React.ReactNode; style?: a
 /** Section eyebrow: "STATION", "PARTICIPANT", "BALANCE". */
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return <Text style={[styles.eyebrow]}>{children}</Text>;
+}
+
+/**
+ * Screen shell: applies safe-area padding top (Dynamic Island / notch) and
+ * bottom (home indicator) on every device, and — when `scroll` is set — a
+ * ScrollView body that keeps forms reachable above the keyboard
+ * (`keyboardShouldPersistTaps` so the Sign in button takes the tap instead
+ * of the first tap being eaten by keyboard dismissal).
+ */
+export function Screen({
+  children,
+  scroll,
+  footer,
+  invert,
+}: {
+  children: React.ReactNode;
+  /** scroll the body — use on every screen with a form or a list */
+  scroll?: boolean;
+  /** pinned bottom slot (primary action), outside the scroll body */
+  footer?: React.ReactNode;
+  invert?: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) },
+        invert && styles.screenInvert,
+      ]}
+    >
+      <View style={styles.stage}>{scroll ? <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView> : children}</View>
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
+    </View>
+  );
 }
 
 /**
@@ -87,6 +121,10 @@ export function Rule({ invert }: { invert?: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: ink.paper },
+  screenInvert: { backgroundColor: ink.ink },
+  stage: { flex: 1 },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: 10 },
   card: {
     borderWidth: layout.hair,
     borderColor: ink.rule,
@@ -108,7 +146,7 @@ const styles = StyleSheet.create({
   },
   actionPressed: { opacity: 0.8 },
   actionDisabled: { backgroundColor: ink.smoke },
-  actionText: { fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
+  actionText: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
   textSolid: { color: ink.paper },
   textInvert: { color: ink.ink },
   textDisabled: { color: ink.ash },

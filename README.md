@@ -66,8 +66,9 @@ inside the conference's closed network, so there is no key to manage. See
 
 ### Seeded data
 
-The database ships with the three operational accounts and the four
-committees, applied via `wrangler d1 migrations apply --remote`:
+The database ships with the three operational accounts, the four committees,
+and a five-participant demo roster, applied via `wrangler d1 migrations apply
+--remote`:
 
 | Account | Role | Phone |
 |---|---|---|
@@ -75,9 +76,27 @@ committees, applied via `wrangler d1 migrations apply --remote`:
 | Sara Benali | `ORGANIZER` | `+213555000002` |
 | Mehdi Haddad | `IT_ADMIN` | `+213555000003` |
 
-PINs are stored as `SHA-256(pin:salt)` and were generated for the dry run;
-rotate them before the event. Committees: `GA` (Hall 1), `SOCHUM` (Hall 2),
-`HRC` (Hall 3), `UNSC` (Hall 4).
+Dry-run PIN for all three accounts: **`424242`** (set by migration `0007`,
+distinct salts, stored as `SHA-256(pin:salt)`). These are dry-run
+credentials — rotate to private PINs before the real event. Committees
+(migrations `0008` + `0010`): **one committee per hall** — `AG1` (Hall 1),
+`AG4` (Hall 2), `CS` (Hall 3), `CSH` (Hall 4), `AMS` (Hall 5), `HRC`
+(Hall 6), `CIJ` (Hall 7), `ECOSOC` (Hall 8).
+
+The demo roster (migration `0006`) has one participant per meal-plan branch,
+so every station receipt is reachable with no setup:
+
+| Alt code | Name | Plan | Balance |
+|---|---|---|---|
+| `DM01` | Amina Kerboubi | `FULL` (grid already full) | 500.00 |
+| `DM02` | Yacine Brahimi | `BREAKFAST_ONLY` | 120.00 |
+| `DM03` | Nadir Belkacem | `LUNCH_ONLY` | 80.00 |
+| `DM04` | Lina Mokrani | `NONE` | 0.00 |
+| `DM05` | Sofiane Ouali | `FULL` | 35.00 |
+
+Scanning `DM01` lands on `MEAL_PLAN_EXHAUSTED`, `DM04` is refused outright,
+and `DM05` walks the FULL grid cell by cell. Replace these when the real
+roster is imported.
 
 ## Mobile apps
 
@@ -88,8 +107,48 @@ pnpm --filter @mianu/organizer start   # or: pnpm --filter @mianu/admin start
 Both apps need a **custom dev client** (EAS), not Expo Go — NFC and
 background location require native modules.
 
+Installable Android APKs (sideload onto a phone):
+
+```bash
+cd apps/organizer && npx eas-cli build --platform android --profile preview
+cd apps/admin    && npx eas-cli build --platform android --profile preview
+```
+
+The apps are on **Expo SDK 57** (React Native 0.86, React 19, new
+architecture). The `preview` profile bakes the deployed API URL in via
+`EXPO_PUBLIC_API_URL`. Three project settings make these builds work — don't
+remove them: `node-linker=hoisted` in the root `.npmrc` (pnpm's isolated
+layout hides `@react-native/gradle-plugin` from Gradle), each app's
+`metro.config.js` (workspace packages resolve through the root
+`node_modules`), and the `expo-splash-screen` plugin block with
+`assets/splash-logo.png` in each `app.json` (the Android splash theme
+references the logo drawable unconditionally, so a config without an image
+fails resource linking).
+
 NFC requires a usage string on iOS (`Info.plist` `NFCReaderUsageDescription`)
-and the NFC tag-reading entitlement.
+and the NFC tag-reading entitlement — both configured in each `app.json`.
+For a native iPhone install via Xcode (full NFC, no Apple Developer Program
+required), see **[docs/IOS_XCODE_INSTALL.md](./docs/IOS_XCODE_INSTALL.md)**.
+
+### Running in Expo Go (iOS or Android)
+
+Both apps run in Expo Go: they are on the SDK current Expo Go ships, and the
+NFC native module (which Expo Go cannot load) is guarded — the apps boot
+normally and every scan screen falls back to the typed alt code (which
+exercises the same worker routes). The EAS builds above are the ones with
+full NFC.
+
+```bash
+pnpm --filter @mianu/organizer go   # or: pnpm --filter @mianu/admin go
+```
+
+`go` runs `expo start --tunnel` with the deployed API URL baked into the
+bundle, so the QR code works in Expo Go on any network. `pnpm start` instead
+expects a custom dev-client build.
+
+IT Admin accounts: see [Seeded data](#seeded-data) — the IT_ADMIN phone signs
+into the admin app; badge linking and top-ups then hit the live roster
+(`DM01`–`DM05`).
 
 ## Verifying the UI
 
@@ -101,7 +160,8 @@ headless Chrome, at both an iPhone (390×844) and an Android (412×915) viewport
 pnpm --filter @mianu/preview test
 ```
 
-That renders 14 shots and runs two audits over them:
+That renders 18 shots (9 cases × iOS + Android viewports) and runs two audits
+over them:
 
 - **palette** — every colour emitted by the render must be part of the
   monochrome ramp and strictly achromatic, so no accidental blue/red sneaks
@@ -109,13 +169,37 @@ That renders 14 shots and runs two audits over them:
 - **content** — each shot must contain the copy its screen exists to show, so
   an empty render or a wrong-branch render is caught.
 
-Screens covered: scan (idle + denied receipt), inbox, head↔deputy comms,
-presence board, badge linking, balance top-up.
+Screens covered: sign-in, station picker, scan (idle + denied receipt), the
+two meal-grid outcomes (plan exhausted, outside the grid), inbox, head↔deputy
+comms, presence board, badge linking, balance top-up.
+
+## End-to-end test
+
+The worker is also covered by a 31-assertion smoke test that runs against a
+real `wrangler dev` server with a local D1 database — login and refresh,
+session revocation after logout, the full scan flow (idempotent retries,
+meal-grid rejections, hall check-in), badge linking and chip resolution,
+roster search, top-ups, notifications, chat, presence, the board, and GPS
+pings.
+
+From `workers/api`:
+
+```bash
+rm -rf .wrangler/state
+npx wrangler d1 migrations apply mianu-app-db --local
+npx wrangler d1 execute mianu-app-db --local --file test/fixtures/e2e_seed.sql -y
+printf '%s' 'JWT_SECRET=local-smoke-secret' > .dev.vars
+npx wrangler dev --port 8799 --local        # in one terminal
+node test/e2e_smoke.mjs                     # in another
+```
+
+The meal grid and scan state persist across runs against the same local DB;
+reset `.wrangler/state` for a fully deterministic run.
 
 ## Features
 
 1. **Check-in / check-out** — conference-level and per-hall, by NFC badge scan or typed alt code.
-2. **Meal traceability** — breakfast & lunch scanning deducts from a per-participant balance.
+2. **Meal traceability** — see [Meal entitlement](#meal-entitlement) below.
 3. **Notifications & chat** — one-way head → organizers; two-way head ↔ deputies.
 4. **Organizer location** — hybrid GPS + hall-level, shown on the head's dashboard.
 5. **Public water-order endpoint** — see [`docs/WATER_API.md`](./docs/WATER_API.md).
@@ -128,3 +212,34 @@ scan verdict, which inverts to white-on-black so a refused meal is
 unmissable in a doorway. All primary actions are ≥56pt and bottom-anchored so
 a thumb reaches them while the other hand holds a stack of badges. Tokens
 live in `packages/ui/src/theme.ts`.
+
+## Meal entitlement
+
+The conference runs 3 days with two meals a day — breakfast and lunch — so the
+grid is `(participant, day, meal_type)` and each cell may be consumed exactly
+once. A FULL plan is 6 meals; BREAKFAST_ONLY and LUNCH_ONLY are 3; NONE blocks
+the station outright.
+
+- Day 1 lunch then a second day-1 lunch → `MEAL_ALREADY_SERVED`.
+- Day 2 lunch after day 1's → served, because it is a different cell.
+- All 6 cells filled → `MEAL_PLAN_EXHAUSTED`.
+- A scan on day 4 or later → `MEAL_DAY_CLOSED`.
+
+The grid is enforced by the primary key of `meal_serve_log`, not by application
+logic, so even two devices racing on the same badge cannot serve one meal
+twice — the second `INSERT` fails the constraint.
+
+### Free items (the journal)
+
+The journal desk hands one copy per delegate per conference day, on any meal
+plan (including `NONE`). It is a *daily handout, not a meal*: it never
+consumes a meal-grid slot, never touches the balance ledger, and cannot
+grant an extra meal. The once-per-day rule is enforced by the primary key of
+`free_item_log` `(participant, item, day)` — same double-handout guard as
+the meal grid. Day 1 is the row in
+`conference_config` (`start_date`, currently `2026-09-26`); IT can move the
+dates there if the schedule shifts.
+
+Scans are idempotent on `client_scan_id`, so a retry over a flaky network never
+double-commits, and no scan is ever accepted without a server response — if the
+device is offline the scan is refused, never queued locally.

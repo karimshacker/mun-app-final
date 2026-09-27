@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import NfcManager, { NfcTech } from 'react-native-nfc-manager';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../lib/api';
+import { readBadgeUid, NfcUnavailableError, NfcTimeoutError, releaseNfc } from '../lib/nfc';
 import type { ScanResult, StationType } from '@mianu/types';
 import { Action, Card, Eyebrow, GhostLink, ink, layout, Mono, Rule, type, VerdictTone } from '@mianu/ui';
 
@@ -11,6 +12,10 @@ interface Props {
   mealType?: 'BREAKFAST' | 'LUNCH';
   /** label shown above the target, e.g. "MAIN ENTRANCE" / "HALL 3 · SOCHUM" */
   stationLabel: string;
+  /** called after a scan is acknowledged, so the parent can log/refresh */
+  onScanned?: (result: ScanResult) => void;
+  /** escape hatch back to the station picker (an operator works one station at a time) */
+  onExit?: () => void;
 }
 
 /**
@@ -25,7 +30,7 @@ interface Props {
  *  - after every scan we show a full receipt with a verdict, and the *only*
  *    way on is the bottom "NEXT" action — a clear checkpoint per person.
  */
-export function ScanScreen({ stationType, committeeId, mealType, stationLabel }: Props) {
+export function ScanScreen({ stationType, committeeId, mealType, stationLabel, onScanned, onExit }: Props) {
   const [altMode, setAltMode] = useState(false);
   const [altCode, setAltCode] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -43,11 +48,14 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
         stationType,
         committeeId,
         mealType,
-        clientScanId: `${deviceStamp()}-${Date.now()}`,
+        // Unique per physical scan; the server dedupes retries of the same
+        // scan by this id. Generated at scan time — never fabricated.
+        clientScanId: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       });
       setResult(res);
+      onScanned?.(res);
     } catch (e: any) {
-      setError(e.code ? humanError(e.code) : 'Something went wrong. Try again.');
+      setError(e?.code ? humanError(e.code) : 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
@@ -57,19 +65,22 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
     setError(null);
     setBusy(true);
     try {
-      await NfcManager.requestTechnology(NfcTech.Ndef);
-      const tag = await NfcManager.getTag();
-      const uid = (tag?.id ?? '').toLowerCase();
-      if (!uid) throw new Error('empty_tag');
+      // Real read: polls NDEF and the raw tag technologies, bounded by a
+      // timeout, and normalizes the UID to lowercase hex.
+      const { uid } = await readBadgeUid();
       await submit(uid);
     } catch (e: any) {
-      setError(
-        /not_supported|unavailable|tag_response|empty_tag/i.test(String(e?.message ?? ''))
-          ? 'NFC unavailable on this device. Use the code on the badge.'
-          : 'Scan failed. Hold the badge flat against the top of the phone.',
-      );
+      if (e instanceof NfcTimeoutError) {
+        setError('No badge read. Hold it flat against the phone and try again, or type the code.');
+      } else if (e instanceof NfcUnavailableError) {
+        setError('NFC is off. Turn it on in settings, or type the code on the badge.');
+      } else if (e?.message === 'unreadable_tag') {
+        setError('Chip unreadable. Use the code printed on the badge.');
+      } else {
+        setError('Scan failed. Hold the badge flat against the top of the phone.');
+      }
     } finally {
-      NfcManager.cancelTechnologyRequest();
+      await releaseNfc();
       setBusy(false);
     }
   };
@@ -98,7 +109,10 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
             <Action
               label={busy ? 'Submitting…' : 'Submit code'}
               disabled={altCode.trim().length < 2 || busy}
-              onPress={() => submit(undefined, altCode.trim())}
+              onPress={() => {
+                Keyboard.dismiss();
+                submit(undefined, altCode.trim());
+              }}
               testID="submit-code"
             />
           </View>
@@ -106,6 +120,11 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
             <GhostLink label="Scan NFC instead" onPress={() => { setAltMode(false); setError(null); }} />
           </View>
         </Card>
+        {onExit ? (
+          <View style={styles.rowCenter}>
+            <GhostLink label="Change station" onPress={onExit} />
+          </View>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Screen>
     );
@@ -128,6 +147,11 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
           <GhostLink label="Badge won't scan · Type code instead" onPress={() => { setAltMode(true); setError(null); }} />
         </View>
       </Card>
+      {onExit ? (
+        <View style={styles.rowCenter}>
+          <GhostLink label="Change station" onPress={onExit} />
+        </View>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </Screen>
   );
@@ -135,13 +159,16 @@ export function ScanScreen({ stationType, committeeId, mealType, stationLabel }:
 
 /** Header block that identifies the station so an operator never scans into the wrong queue. */
 function Screen({ stationLabel, children }: { stationLabel: string; children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.stationLabel}>{stationLabel}</Text>
-        <Rule />
-      </View>
-      <View style={styles.body}>{children}</View>
+    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <Text style={styles.stationLabel}>{stationLabel}</Text>
+          <Rule />
+        </View>
+        <View style={styles.body}>{children}</View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -159,9 +186,10 @@ export function Receipt({
   const tone = toneFor(result.outcome);
   const denied = tone === 'deny';
   const p = result.participant;
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.screen, denied && styles.screenInvert]}>
+    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }, denied && styles.screenInvert]}>
       <View style={styles.header}>
         <Text style={[styles.stationLabel, denied && styles.textInvert]}>{stationLabel}</Text>
         <Rule invert={denied} />
@@ -171,7 +199,9 @@ export function Receipt({
           <Text style={[styles.verdict, denied && styles.verdictInvert]} numberOfLines={2}>
             {messageFor(result.outcome)}
           </Text>
-          <Text style={[styles.verdictKind, denied && styles.textInvert]}>{kindFor(result.outcome)}</Text>
+          <Text style={[styles.verdictKind, denied && styles.textInvert]}>
+            {kindFor(result.outcome, result.participant)}
+          </Text>
         </View>
 
         {p ? (
@@ -197,6 +227,16 @@ export function Receipt({
           </Card>
         ) : null}
 
+        {result.mealsRemaining !== undefined ? (
+          <Card style={[styles.card, denied && styles.cardInvert]}>
+            <Eyebrow>Meals left on this plan</Eyebrow>
+            <Text style={[styles.balance, denied && styles.textInvert]}>
+              {result.mealsRemaining}{' '}
+              <Text style={styles.currency}>{result.mealsRemaining === 1 ? 'MEAL' : 'MEALS'}</Text>
+            </Text>
+          </Card>
+        ) : null}
+
         <View style={styles.stackLarge}>
           <Action label="Next" invert={denied} onPress={onDone} testID="next-scan" />
         </View>
@@ -215,8 +255,18 @@ function Fact({ label, value, invert }: { label: string; value: string; invert?:
 }
 
 export function toneFor(outcome: ScanResult['outcome']): VerdictTone {
-  if (outcome === 'CHECKED_IN' || outcome === 'CHECKED_OUT' || outcome === 'MEAL_SERVED') return 'go';
-  if (outcome === 'NOT_FOUND' || outcome === 'BLOCKED') return 'deny';
+  if (
+    outcome === 'CHECKED_IN' ||
+    outcome === 'CHECKED_OUT' ||
+    outcome === 'MEAL_SERVED' ||
+    outcome === 'ITEM_SERVED'
+  )
+    return 'go';
+  // The participant is sent away: roster problem, blocked badge, or no meals left.
+  if (outcome === 'NOT_FOUND' || outcome === 'BLOCKED' || outcome === 'MEAL_PLAN_EXHAUSTED') {
+    return 'deny';
+  }
+  // Nobody is at fault, the station is just not serving right now.
   return 'hold';
 }
 
@@ -230,14 +280,21 @@ export function messageFor(outcome: ScanResult['outcome']): string {
     case 'NOT_FOUND': return 'Unknown badge';
     case 'BLOCKED': return 'Badge blocked';
     case 'MEAL_ALREADY_SERVED': return 'Already ate';
+    case 'MEAL_PLAN_EXHAUSTED': return 'Plan used up';
+    case 'MEAL_DAY_CLOSED': return 'Not serving now';
     case 'INSUFFICIENT_BALANCE': return 'No balance left';
     case 'MEAL_NOT_IN_PLAN': return 'Not on this meal plan';
+    case 'ITEM_SERVED': return 'Journal handed over';
+    case 'ITEM_ALREADY_SERVED': return 'Journal already given today';
     default: return 'Try again';
   }
 }
 
 /** Short machine-style tag under the verdict — operator jargon, kept flat. */
-export function kindFor(outcome: ScanResult['outcome']): string {
+export function kindFor(
+  outcome: ScanResult['outcome'],
+  participant: ScanResult['participant'] | null = null,
+): string {
   switch (outcome) {
     case 'CHECKED_IN': return 'CONFERENCE · IN';
     case 'CHECKED_OUT': return 'CONFERENCE · OUT';
@@ -247,9 +304,24 @@ export function kindFor(outcome: ScanResult['outcome']): string {
     case 'NOT_FOUND': return 'NOT IN ROSTER';
     case 'BLOCKED': return 'SEE IT ADMIN';
     case 'MEAL_ALREADY_SERVED': return 'DUPLICATE · BLOCKED';
+    case 'MEAL_PLAN_EXHAUSTED':
+      return `${planAllowance(participant)} OF ${planAllowance(participant)} USED`;
+    case 'MEAL_DAY_CLOSED': return 'OUTSIDE THE GRID';
     case 'INSUFFICIENT_BALANCE': return 'BALANCE 0';
     case 'MEAL_NOT_IN_PLAN': return 'PLAN MISMATCH';
+    case 'ITEM_SERVED': return 'FREE · ONE PER DAY';
+    case 'ITEM_ALREADY_SERVED': return 'DUPLICATE · BLOCKED';
     default: return 'NO OPINION';
+  }
+}
+
+/** Total meals a plan buys across the whole conference, for the exhaustion tag. */
+function planAllowance(p: ScanResult['participant'] | null): number {
+  switch (p?.mealPlan) {
+    case 'FULL': return 6;
+    case 'BREAKFAST_ONLY':
+    case 'LUNCH_ONLY': return 3;
+    default: return 0;
   }
 }
 
@@ -268,19 +340,19 @@ export function humanError(code: string): string {
     case 'unauthorized': return 'Session expired. Sign in again from the app.';
     case 'conflict': return 'Already recorded. Nothing to do — move on.';
     case 'not_found': return 'Unknown badge. Check the code with IT.';
+    case 'bad_request': return 'Scan rejected — the code format is wrong. Check it and try again.';
+    case 'provide_exactly_one_of_badgeUid_altCode': return 'Scan rejected — use a badge or a code, not both.';
+    case 'committeeId_required_for_hall_stations': return 'Pick the hall again from the station list, then scan.';
+    case 'mealType_required_for_meal_station': return 'Pick the meal again from the station list, then scan.';
     case 'server': return 'Server problem. Try once more; do not double-scan.';
     default: return 'Something went wrong. Try again.';
   }
 }
 
-function deviceStamp(): string {
-  // per-install id, so retries of the same physical scan dedupe server-side
-  return 'dev'; // TODO: read from secure storage
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: ink.paper },
   screenInvert: { backgroundColor: ink.ink },
+  flex: { flex: 1 },
   header: { paddingHorizontal: layout.gutter, paddingTop: layout.gutter, gap: 12 },
   body: { flex: 1, paddingHorizontal: layout.gutter, paddingTop: 20, gap: 16, justifyContent: 'center' },
   stationLabel: { ...type.label, fontSize: 15, color: ink.ink },
@@ -291,10 +363,11 @@ const styles = StyleSheet.create({
     borderColor: ink.rule,
     borderRadius: 4,
     backgroundColor: ink.paper,
-    padding: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     ...type.mono,
-    fontSize: 28,
-    letterSpacing: 8,
+    fontSize: 19,
+    letterSpacing: 5,
     color: ink.ink,
   },
   stack: { marginTop: 16, gap: 12 },
