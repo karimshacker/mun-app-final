@@ -140,9 +140,10 @@ lanes: a **free Apple ID** (installs fine, but Apple bars personal teams from
 the NFC entitlement, so those builds fall back to typed alt codes) and a
 **paid account** (full NFC) — plus the 30-iPhone conference plan and the
 free full-NFC **Android station** route. For over-the-air iOS distribution
-to testers (paid account), see **[docs/TESTFLIGHT_GUIDE.md](./docs/TESTFLIGHT_GUIDE.md)** — and if your machine is **Windows**, follow
-**[docs/IOS_WINDOWS_TESTFLIGHT.md](./docs/IOS_WINDOWS_TESTFLIGHT.md)**:
-EAS cloud builds + TestFlight to 30 iPhones with NFC, no Mac required.
+to testers (paid account), see **[docs/TESTFLIGHT_GUIDE.md](./docs/TESTFLIGHT_GUIDE.md)**. No Mac? Follow
+**[docs/IOS_WINDOWS_TESTFLIGHT.md](./docs/IOS_WINDOWS_TESTFLIGHT.md)** (Windows) or
+**[docs/IOS_LINUX_TESTFLIGHT.md](./docs/IOS_LINUX_TESTFLIGHT.md)** (Linux):
+EAS cloud builds + TestFlight to 30 iPhones with NFC.
 
 ### Running in Expo Go (iOS or Android)
 
