@@ -63,7 +63,7 @@ export function LinkBadgeScreen() {
         setError('No chip read. Hold the badge flat and try again.');
       } else if (e instanceof NfcUnavailableError) {
         setError(
-          'NFC is off or unavailable. Enrollment needs the chip — open the app in the EAS build, not Expo Go.',
+          'NFC is off or unavailable. Enrollment needs the chip — use a native build: the Android APK, a paid-team iPhone build, or the Expo dev-client (not Expo Go).',
         );
       } else {
         setError('Chip unreadable. Hold the badge flat against the top of the phone.');

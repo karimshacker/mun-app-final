@@ -22,6 +22,9 @@ build/
 # Native
 ios/
 android/
+# Marker left by packages/build/strip-ios-nfc-entitlements.mjs so prebuild
+# restores the stripped NFC entitlements for the next (paid/NFC) build
+.ios-free-mode
 
 # Editor / OS
 .DS_Store

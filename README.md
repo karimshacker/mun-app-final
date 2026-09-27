@@ -16,6 +16,7 @@ See **[PLAN.md](./PLAN.md)** for the full design: features, data model, phases, 
 | API client | `packages/api-client` | Typed SDK mirroring the worker routes |
 | UI kit | `packages/ui` | The monochrome "secret agent" design system |
 | Preview | `packages/preview` | Renders the RN screens in a browser and audits them |
+| Build scripts | `packages/build` | iOS NFC-entitlement strip/check helpers for free vs paid Apple-ID builds |
 
 > Realtime (Durable Objects for chat/presence) is designed in PLAN.md but not
 > yet implemented.
@@ -66,7 +67,7 @@ inside the conference's closed network, so there is no key to manage. See
 
 ### Seeded data
 
-The database ships with the three operational accounts, the four committees,
+The database ships with the three operational accounts, the eight committees,
 and a five-participant demo roster, applied via `wrangler d1 migrations apply
 --remote`:
 
@@ -107,7 +108,21 @@ pnpm --filter @mianu/organizer start   # or: pnpm --filter @mianu/admin start
 Both apps need a **custom dev client** (EAS), not Expo Go — NFC and
 background location require native modules.
 
-Installable Android APKs (sideload onto a phone):
+Installable Android APKs (sideload onto a phone) — build **locally**, free
+and independent of any EAS quota (needs JDK 17 + the Android SDK; one-time
+setup steps are in [docs/IOS_XCODE_INSTALL.md](./docs/IOS_XCODE_INSTALL.md)):
+
+```bash
+cd apps/organizer
+EXPO_PUBLIC_API_URL=https://mianu-api.karimshacker1234.workers.dev \
+  npx expo run:android --variant release
+cd ../admin
+EXPO_PUBLIC_API_URL=https://mianu-api.karimshacker1234.workers.dev \
+  npx expo run:android --variant release
+# → apps/*/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Or via EAS cloud builds when free quota is available:
 
 ```bash
 cd apps/organizer && npx eas-cli build --platform android --profile preview
@@ -127,8 +142,12 @@ fails resource linking).
 
 NFC requires a usage string on iOS (`Info.plist` `NFCReaderUsageDescription`)
 and the NFC tag-reading entitlement — both configured in each `app.json`.
-For a native iPhone install via Xcode (full NFC, no Apple Developer Program
-required), see **[docs/IOS_XCODE_INSTALL.md](./docs/IOS_XCODE_INSTALL.md)**.
+For a native iPhone install via Xcode, see
+**[docs/IOS_XCODE_INSTALL.md](./docs/IOS_XCODE_INSTALL.md)**. It covers both
+lanes: a **free Apple ID** (installs fine, but Apple bars personal teams from
+the NFC entitlement, so those builds fall back to typed alt codes) and a
+**paid account** (full NFC) — plus the 30-iPhone conference plan and the
+free full-NFC **Android station** route.
 
 ### Running in Expo Go (iOS or Android)
 

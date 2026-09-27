@@ -1,0 +1,78 @@
+name: android-apk
+
+# Builds installable release APKs for both apps on GitHub's servers —
+# completely independent of Expo EAS quotas (free for this repo size).
+# Trigger it from the Actions tab ("Run workflow"), or it fires
+# automatically when app/package code changes on master.
+#
+# The APKs bake in the deployed API URL and are signed with the debug
+# keystore (Expo prebuild's release fallback) — exactly right for
+# sideloading at the conference.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - '.github/workflows/android-apk.yml'
+      - 'pnpm-lock.yaml'
+      - '.npmrc'
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_API_URL: https://mianu-api.karimshacker1234.workers.dev
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm i -g pnpm@9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build organizer APK
+        working-directory: apps/organizer
+        run: |
+          npx expo prebuild --platform android --no-install
+          chmod +x android/gradlew
+          bash android/gradlew -p android assembleRelease
+
+      - name: Build admin APK
+        working-directory: apps/admin
+        run: |
+          npx expo prebuild --platform android --no-install
+          chmod +x android/gradlew
+          bash android/gradlew -p android assembleRelease
+
+      - name: Upload organizer APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mianu-organizer-apk
+          path: apps/organizer/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload admin APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mianu-admin-apk
+          path: apps/admin/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
