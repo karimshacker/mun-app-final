@@ -105,6 +105,13 @@ const enroll = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: 
 ok('enroll creates participant + links chip', enroll.status === 200 && enroll.body.ok === true && typeof enroll.body.participantId === 'string', JSON.stringify(enroll.body));
 const byNewUid = await j('/api/admin/lookup?badgeUid=04ee0001', withA());
 ok('enrolled chip resolves via lookup', byNewUid.status === 200 && byNewUid.body.participant?.name === 'Test Delegate', JSON.stringify(byNewUid.body));
+
+// The participant IT just enrolled is immediately usable at every station —
+// here the journal desk: once today, then blocked.
+const enrolledJournal = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'TS01', stationType: 'FREE_ITEM', clientScanId: `smoke-journal-enrolled-${Date.now()}` }) });
+ok('enrolled delegate gets the journal', enrolledJournal.body.outcome === 'ITEM_SERVED', JSON.stringify(enrolledJournal.body));
+const enrolledJournal2 = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'TS01', stationType: 'FREE_ITEM', clientScanId: `smoke-journal-enrolled2-${Date.now()}` }) });
+ok('enrolled delegate journal once per day', enrolledJournal2.body.outcome === 'ITEM_ALREADY_SERVED', JSON.stringify(enrolledJournal2.body));
 const dupEnroll = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0001', name: 'Test Delegate 2', committeeId: 'c_ag4', altCode: 'TS02' }) });
 ok('re-enrolling a linked chip → 409', dupEnroll.status === 409, JSON.stringify(dupEnroll.body));
 const dupCode = await j('/api/admin/enroll', { method: 'POST', ...withA(), body: JSON.stringify({ badgeUid: '04ee0002', name: 'Test Delegate 3', committeeId: 'c_ag4', altCode: 'TS01' }) });
@@ -146,6 +153,25 @@ ok('chat send', chat.status === 200 && chat.body.message?.body === 'smoke messag
 const chatGet = await j('/api/chat', withT());
 ok('chat history', chatGet.body.messages?.some((m) => m.body === 'smoke message'));
 
+console.log('deputy: comms parity + broadcast fan-out');
+const depLogin = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000004', pin: '424242' }) });
+ok('deputy login', depLogin.status === 200 && depLogin.body.user?.role === 'DEPUTY', JSON.stringify(depLogin.body));
+const D = depLogin.body.accessToken;
+const withD = authed(D);
+
+const depChat = await j('/api/chat', { method: 'POST', ...withD(), body: JSON.stringify({ body: 'deputy checking in' }) });
+ok('deputy can send on the head↔deputy channel', depChat.status === 200, JSON.stringify(depChat.body));
+const headSees = await j('/api/chat', withT());
+ok('head sees the deputy message', headSees.body.messages?.some((m) => m.body === 'deputy checking in'));
+
+const depNote = await j('/api/notifications', { method: 'POST', ...withD(), body: JSON.stringify({ title: 'Deputy broadcast', body: 'Water for Hall 2.', audience: 'ALL' }) });
+ok('deputy can broadcast', depNote.status === 200, JSON.stringify(depNote.body));
+
+const scopedNote = await j('/api/notifications', { method: 'POST', ...withT(), body: JSON.stringify({ title: 'CS only', body: 'Session shift.', audience: 'c_cs' }) });
+ok('committee-scoped broadcast accepted', scopedNote.status === 200, JSON.stringify(scopedNote.body));
+const badAud = await j('/api/notifications', { method: 'POST', ...withT(), body: JSON.stringify({ title: 'x', body: 'y', audience: 'c_ghost' }) });
+ok('unknown audience → 404', badAud.status === 404, JSON.stringify(badAud.body));
+
 console.log('presence + board + location');
 const orgLogin = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone: '+213999000002', pin: '424242' }) });
 ok('organizer login', orgLogin.status === 200);
@@ -161,6 +187,19 @@ ok('hall check-in accepted', hallIn.body.outcome === 'CHECKED_IN', JSON.stringif
 const presence = await j('/api/presence', withT());
 ok('presence shows smoke participant in Hall 1', presence.body.rows?.some((r) => r.participantId === 'p_smoke1' && r.hallName === 'Hall 1'), JSON.stringify(presence.body.rows?.slice(0, 2)));
 
+console.log('hall check-out cycle');
+// A hall-out at a different hall must never clear the participant's hall.
+const wrongHallOut = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_OUT', committeeId: 'c_cs', clientScanId: `smoke-wrongout-${Date.now()}` }) });
+ok('hall-out for a different hall never checks out', wrongHallOut.body.outcome !== 'CHECKED_OUT', JSON.stringify(wrongHallOut.body));
+const hallOut = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_OUT', committeeId: 'c_ag1', clientScanId: `smoke-hallout-${Date.now()}` }) });
+ok('hall check-out accepted', hallOut.body.outcome === 'CHECKED_OUT', JSON.stringify(hallOut.body));
+const presenceAfterOut = await j('/api/presence', withT());
+ok('presence clears after hall-out', !(presenceAfterOut.body.rows ?? []).some((r) => r.participantId === 'p_smoke1' && r.hallName === 'Hall 1'), JSON.stringify(presenceAfterOut.body.rows?.slice(0, 2)));
+const hallOutTwice = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_OUT', committeeId: 'c_ag1', clientScanId: `smoke-hallout2-${Date.now()}` }) });
+ok('hall-out with nobody inside → ALREADY_OUT', hallOutTwice.body.outcome === 'ALREADY_OUT', JSON.stringify(hallOutTwice.body));
+const hallInAgain = await j('/api/scan', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK1', stationType: 'HALL_IN', committeeId: 'c_ag1', clientScanId: `smoke-hallin2-${Date.now()}` }) });
+ok('re-entry after hall-out → CHECKED_IN', hallInAgain.body.outcome === 'CHECKED_IN', JSON.stringify(hallInAgain.body));
+
 const loc = await j('/api/location', { method: 'POST', ...withO(), body: JSON.stringify({ lat: 36.7538, lng: 3.0588 }) });
 ok('location ping ok', loc.status === 200);
 const board = await j('/api/board', withT());
@@ -169,6 +208,21 @@ const brk = await j('/api/me/break', { method: 'POST', ...withO(), body: JSON.st
 ok('break toggle ok', brk.status === 200);
 const board2 = await j('/api/board', withT());
 ok('board reflects break flag', board2.body.rows?.some((r) => r.userId === 'u_test_org' && r.onBreak === true), JSON.stringify(board2.body.rows?.slice(0, 3)));
+
+const orgInbox = await j('/api/notifications', withO());
+ok('organizer inbox receives head and deputy broadcasts',
+  orgInbox.body.notifications?.some((n) => n.title === 'Smoke broadcast') &&
+  orgInbox.body.notifications?.some((n) => n.title === 'Deputy broadcast'));
+
+console.log('role guardrails');
+const orgBoard = await j('/api/board', withO());
+ok('organizer denied the head board', orgBoard.status === 403, String(orgBoard.status));
+const orgAdmin = await j('/api/admin/lookup?altCode=SMK1', withO());
+ok('organizer denied admin lookup', orgAdmin.status === 403, String(orgAdmin.status));
+const orgBroadcast = await j('/api/notifications', { method: 'POST', ...withO(), body: JSON.stringify({ title: 'nope', body: 'nope', audience: 'ALL' }) });
+ok('organizer cannot broadcast', orgBroadcast.status === 403, String(orgBroadcast.status));
+const headTopup = await j('/api/admin/topup', { method: 'POST', ...withT(), body: JSON.stringify({ altCode: 'SMK2', amountCents: 100, reason: 'COMP' }) });
+ok('head denied admin topup', headTopup.status === 403, String(headTopup.status));
 
 console.log('logout + session revocation');
 const out = await j('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refresh.body.refreshToken }) });

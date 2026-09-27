@@ -195,12 +195,14 @@ comms, presence board, badge linking, balance top-up.
 
 ## End-to-end test
 
-The worker is also covered by a 31-assertion smoke test that runs against a
+The worker is also covered by a 62-assertion smoke test that runs against a
 real `wrangler dev` server with a local D1 database — login and refresh,
 session revocation after logout, the full scan flow (idempotent retries,
-meal-grid rejections, hall check-in), badge linking and chip resolution,
-roster search, top-ups, notifications, chat, presence, the board, and GPS
-pings.
+meal-grid rejections, hall in **and out**), badge linking and enrollment with
+its conflict paths, chip resolution, roster search, top-ups, notifications
+(head **and** deputy broadcasts, per-committee audiences), chat, presence,
+the board, GPS pings, break toggles, and role guardrails (organizers and
+heads are refused each other's routes).
 
 From `workers/api`:
 

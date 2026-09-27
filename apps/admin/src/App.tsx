@@ -2,14 +2,16 @@
  * Root of the IT admin app. Two jobs, two tabs: bind badges, manage money.
  * The tab bar mirrors the organizer app's so an admin switching between the
  * two apps on the same phone finds the controls in the same place. Sessions
- * persist across app kills exactly like the organizer app's.
+ * persist across app kills; the strip above the tab bar shows who is signed
+ * in and hands the phone to the next operator.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ink, layout, Rule, type } from '@mianu/ui';
+import { GhostLink, ink, layout, Rule, type } from '@mianu/ui';
 import type { AuthSession } from '@mianu/types';
-import { bindSessionPersistence, restoreSession } from './lib/session';
+import { api } from './lib/api';
+import { bindSessionPersistence, persistSession, restoreSession } from './lib/session';
 import { LoginScreen } from './screens/LoginScreen';
 import { LinkBadgeScreen } from './screens/LinkBadgeScreen';
 import { TopUpScreen } from './screens/TopUpScreen';
@@ -23,10 +25,27 @@ export function App() {
 
   useEffect(() => {
     bindSessionPersistence();
+    // Chain onto the persistence handler: expired sessions must BOTH clear
+    // the stored file and return the app to the login screen.
+    const chained = api.onAuthLost;
+    api.onAuthLost = () => {
+      chained?.();
+      setSession(null);
+    };
     restoreSession()
       .then(setSession)
       .finally(() => setBooted(true));
   }, []);
+
+  // Plain function, not a hook: it lives after the early returns, so a
+  // useCallback here would change hook order between renders and crash.
+  const signOut = async () => {
+    await api.signOut();
+    // Also delete the stored copy so the next launch starts at login.
+    await persistSession(null);
+    setSession(null);
+    setTab('badges');
+  };
 
   if (!booted) {
     return <SafeAreaProvider><View style={styles.shell} /></SafeAreaProvider>;
@@ -47,7 +66,7 @@ export function App() {
 
   return (
     <SafeAreaProvider>
-    <AppTabs session={session} tab={tab} setTab={setTab} />
+      <AppTabs session={session} tab={tab} setTab={setTab} onSignOut={signOut} />
     </SafeAreaProvider>
   );
 }
@@ -56,10 +75,12 @@ function AppTabs({
   session,
   tab,
   setTab,
+  onSignOut,
 }: {
   session: AuthSession;
   tab: Tab;
   setTab: (t: Tab) => void;
+  onSignOut: () => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -67,6 +88,12 @@ function AppTabs({
     <View style={styles.shell}>
       <View style={styles.stage}>
         {tab === 'badges' ? <LinkBadgeScreen /> : <TopUpScreen />}
+      </View>
+      <View style={styles.accountRow}>
+        <Text style={styles.accountName} numberOfLines={1}>
+          {session.user.name} · {session.user.role}
+        </Text>
+        <GhostLink label="Sign out" onPress={onSignOut} />
       </View>
       <Rule />
       <View style={[styles.tabs, { paddingBottom: 8 + insets.bottom }]}>
@@ -89,6 +116,15 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: ink.paper },
   stage: { flex: 1 },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingTop: 8,
+    gap: 12,
+  },
+  accountName: { ...type.label, fontSize: 11, color: ink.ash, flexShrink: 1 },
   tabs: { flexDirection: 'row', paddingBottom: 8 },
   tab: { flex: 1, alignItems: 'center', paddingTop: 10, minHeight: layout.touch },
   tabMark: { width: 28, height: 3, backgroundColor: ink.ink, marginBottom: 6 },

@@ -11,14 +11,14 @@
  * its own component so the tab bar can read the home-indicator inset from
  * hooks that never sit behind an early return.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ink, layout, Rule, type } from '@mianu/ui';
+import { GhostLink, ink, layout, Rule, type } from '@mianu/ui';
 import type { AuthSession, Role, StationType } from '@mianu/types';
 import { api } from './lib/api';
-import { bindSessionPersistence, restoreSession } from './lib/session';
+import { bindSessionPersistence, persistSession, restoreSession } from './lib/session';
 import { LoginScreen } from './screens/LoginScreen';
 import { StationScreen, type StationChoice } from './screens/StationScreen';
 import { ScanScreen } from './screens/ScanScreen';
@@ -47,6 +47,13 @@ export function App() {
   // Restore the persisted session before the first render.
   useEffect(() => {
     bindSessionPersistence();
+    // Chain onto the persistence handler: expired sessions must BOTH clear
+    // the stored file and return the app to the login screen.
+    const chained = api.onAuthLost;
+    api.onAuthLost = () => {
+      chained?.();
+      setSession(null);
+    };
     restoreSession()
       .then(setSession)
       .finally(() => setBooted(true));
@@ -104,6 +111,18 @@ export function App() {
     );
   }
 
+  // Plain function, not a hook: it lives after the early returns, so a
+  // useCallback here would change hook order between renders and crash.
+  const signOut = async () => {
+    await api.signOut();
+    // api.signOut clears the in-memory client; this also deletes the stored
+    // copy so the next launch starts at login, not the previous account.
+    await persistSession(null);
+    setSession(null);
+    setStation(null);
+    setTab('scan');
+  };
+
   return (
     <SafeAreaProvider>
       <SignedInShell
@@ -112,6 +131,7 @@ export function App() {
         setStation={setStation}
         tab={tab}
         setTab={setTab}
+        onSignOut={signOut}
       />
     </SafeAreaProvider>
   );
@@ -123,12 +143,14 @@ function SignedInShell({
   setStation,
   tab,
   setTab,
+  onSignOut,
 }: {
   session: AuthSession;
   station: StationChoice | null;
   setStation: (s: StationChoice | null) => void;
   tab: Tab;
   setTab: (t: Tab) => void;
+  onSignOut: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const role = session.user.role;
@@ -155,12 +177,25 @@ function SignedInShell({
         {current.id === 'chat' && <CommsHub myUserId={session.user.id} />}
         {current.id === 'board' && <BoardScreen />}
       </View>
+      <AccountStrip name={session.user.name} role={role} onSignOut={onSignOut} />
       <Rule />
       <View style={[styles.tabs, { paddingBottom: 8 + insets.bottom }]}>
         {visible.map((t) => (
           <TabButton key={t.id} label={t.label} active={t.id === current.id} onPress={() => setTab(t.id)} />
         ))}
       </View>
+    </View>
+  );
+}
+
+/** Who is on this phone, and the way to hand the phone to someone else. */
+function AccountStrip({ name, role, onSignOut }: { name: string; role: Role; onSignOut: () => void }) {
+  return (
+    <View style={styles.accountRow}>
+      <Text style={styles.accountName} numberOfLines={1}>
+        {name} · {role}
+      </Text>
+      <GhostLink label="Sign out" onPress={onSignOut} />
     </View>
   );
 }
@@ -222,6 +257,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   commsChipActive: { backgroundColor: ink.ink, color: ink.inverse },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingTop: 8,
+    gap: 12,
+  },
+  accountName: { ...type.label, fontSize: 11, color: ink.ash, flexShrink: 1 },
   tabs: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingTop: 10, minHeight: layout.touch },
   tabMark: { width: 28, height: 3, backgroundColor: ink.ink, marginBottom: 6 },

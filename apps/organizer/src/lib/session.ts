@@ -27,6 +27,10 @@ export async function restoreSession(): Promise<AuthSession | null> {
   }
 }
 
+async function writeSessionFile(session: AuthSession): Promise<void> {
+  await FileSystem.writeAsStringAsync(FILE, JSON.stringify(session));
+}
+
 export async function persistSession(session: AuthSession | null): Promise<void> {
   api.setSession(session);
   if (!session) {
@@ -37,15 +41,24 @@ export async function persistSession(session: AuthSession | null): Promise<void>
     }
     return;
   }
-  await FileSystem.writeAsStringAsync(FILE, JSON.stringify(session));
+  await writeSessionFile(session);
 }
 
-/** Wire the API client so every login/refresh/logout keeps the file in sync. */
+/**
+ * Wire the API client so every login/refresh keeps the file in sync — the
+ * client rotates the refresh token server-side, so a session restored after
+ * an app kill must be the LATEST one, not the one from login time. Clearing
+ * stays explicit (signOut / onAuthLost) so a transient null never wipes a
+ * good session.
+ */
 export function bindSessionPersistence() {
   api.onSession = (s) => {
-    if (!s) return; // saves are explicit; avoids write-on-every-refresh races
+    if (!s) return;
+    writeSessionFile(s).catch(() => {
+      // best-effort: the in-memory session still works; next refresh retries
+    });
   };
   api.onAuthLost = () => {
-    persistSession(null);
+    void persistSession(null);
   };
 }
