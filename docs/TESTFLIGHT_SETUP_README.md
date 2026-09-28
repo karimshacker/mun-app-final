@@ -94,18 +94,15 @@ distribution cert was imported first, and the login available has no team),
 upload both files from the account holder through EAS's bulk channel instead:
 
 1. Write a `credentials.json` in the **app directory** (`apps/organizer/`,
-   gitignored):
+   gitignored). Field names matter — the CLI validates exactly this shape:
 
 ```json
 {
   "ios": {
+    "provisioningProfilePath": "../../.secrets/apple/MIANUOrganizer.mobileprovision",
     "distributionCertificate": {
       "path": "../../.secrets/apple/apple.p12",
       "password": "<the p12 export password>"
-    },
-    "provisioningProfile": {
-      "path": "../../.secrets/apple/MIANUOrganizer.mobileprovision",
-      "distributionType": "app-store"
     }
   }
 }
