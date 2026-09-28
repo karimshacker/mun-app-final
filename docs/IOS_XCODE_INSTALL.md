@@ -93,17 +93,18 @@ The checks must print `OK: NFC entitlement present`.
    lane A, your **paid team** on lane B. First time: Xcode ▸ Settings ▸
    Accounts ▸ **+** ▸ sign in, then return here and pick the team
 5. **Bundle Identifier:** must be unique across all of Apple. If the default
-   `com.mianu.paymentapp` is taken or signing complains, set
-   `com.mianu.paymentapp.<yourname>` (and the admin equivalent
+   `com.mianu.organize` is taken or signing complains, set
+   `com.mianu.organize.<yourname>` (and the admin equivalent
    `com.mianu.paymentapp.admin.<yourname>`)
 6. Repeat 1–5 for the admin app
    (`apps/admin/ios/MIANUITAdmin.xcworkspace`)
 
-> Bundle IDs are `com.mianu.paymentapp` (organizer) and
-> `com.mianu.paymentapp.admin` (IT admin). They were renamed from
-> `tn.mianu.smiv.*` — if you still have an old install or an old App Store
-> Connect record under the old ID, treat it as a separate app and create
-> fresh records under the new IDs.
+> Bundle IDs are `com.mianu.organize` (organizer, SKU `MIANUOrganization`)
+> and `com.mianu.paymentapp.admin` (IT admin). The organizer ID was renamed
+> twice (`tn.mianu.smiv.organizer` → `com.mianu.paymentapp` →
+> `com.mianu.organize`) — if you still have an old install or an old App
+> Store Connect record under an old ID, treat it as a separate app and
+> create fresh records under the current IDs.
 
 > **Free-account limits:** one app per bundle id, max ~10 App IDs per week,
 > **max 3 devices per Apple ID**, installs expire after **7 days** (just

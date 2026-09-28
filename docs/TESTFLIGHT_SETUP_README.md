@@ -1,7 +1,7 @@
 # Setup: upload the Organizer app to TestFlight
 
 The account holder provided everything needed for a paid Apple deployment of
-the **MIANU Organizer** app (`com.mianu.paymentapp`). This guide turns those
+the **MIANU Organizer** app (`com.mianu.organize`). This guide turns those
 five items into a TestFlight upload with **no Mac and no app-specific
 password** — the App Store Connect API key does the upload, and nothing
 secret ever enters the repo.
@@ -9,6 +9,14 @@ secret ever enters the repo.
 > **Scope:** materials exist for the organizer app only. The IT Admin app
 > (`com.mianu.paymentapp.admin`) has no profile or App Store Connect record
 > yet — the same steps apply once the account holder creates them.
+>
+> **Bundle-ID note:** the organizer ID is `com.mianu.organize` (renamed from
+> `com.mianu.paymentapp`). The App ID, provisioning profile, and ASC record
+> must exist **under the new ID** — if the account holder's materials are for
+> `com.mianu.paymentapp`, they need to register `com.mianu.organize` on the
+> portal (with the NFC Tag Reading capability enabled), regenerate the
+> profile, and create the ASC record before Step 2 works. The distribution
+> certificate itself is app-agnostic and stays valid.
 
 ## What you were given (and where it goes)
 
@@ -19,7 +27,7 @@ never committed, never zipped into a chat or a shared drive**:
 |---|---|---|---|
 | 1 | Distribution certificate (+ private key) | `apple.p12` | Signing the app in the EAS cloud build |
 | 2 | Provisioning profile | `MIANUOrganizer.mobileprovision` | Binds cert + App ID + NFC entitlement |
-| 3 | Bundle ID | `com.mianu.paymentapp` | Already matches `apps/organizer/app.json` — nothing to change |
+| 3 | Bundle ID | `com.mianu.organize` | Matches `apps/organizer/app.json` — the App ID must be registered on the portal under this exact ID |
 | 4 | App Store Connect record | (exists on ASC) | Referenced in `eas.json` as `ascAppId` |
 | 5 | App Store Connect API key | `AuthKey_<KEYID>.p8` + Issuer ID + Key ID | Uploading the build to ASC |
 
@@ -116,7 +124,7 @@ upload both files from the account holder through EAS's bulk channel instead:
 3. Verify with `npx eas-cli credentials --platform ios`: both rows show ✓.
 
 The profile must be the paid team's App Store profile for
-`com.mianu.paymentapp` **with the NFC entitlement** (check it first with the
+`com.mianu.organize` **with the NFC entitlement** (check it first with the
 openssl one-liner above). EAS will use these files as-is; it will not be able
 to auto-renew an imported profile when it expires — ask the account holder
 for a fresh one before this profile lapses.
@@ -212,7 +220,7 @@ The submit profile is already filled — nothing per-release.
 | `eas build` fails: no credentials suitable for distribution | Step 2 wasn't done for the **production** profile — run `eas credentials --platform ios` from `apps/organizer` |
 | Submit fails on authentication | The three `FILL_ME` fields are unfilled, or `ascApiKeyPath` doesn't resolve — `ls ../../.secrets/apple/` from `apps/organizer` |
 | EAS asks for an Apple password at submit | The `.p8` replaces passwords entirely — if a password prompt appears, the key fields are wrong; never enter an Apple password |
-| `invalid profile` / codesign mismatch at build | Profile's App ID ≠ `com.mianu.paymentapp`, or cert and profile are from different teams — verify the file pair |
+| `invalid profile` / codesign mismatch at build | Profile's App ID ≠ `com.mianu.organize`, or cert and profile are from different teams — verify the file pair |
 | Codesign mismatch mentioning **associated domains** | Stale generated `ios/` dir — `rm -rf apps/organizer/ios` and rebuild (associated-domains was removed from `app.json`; the profile doesn't grant it) |
 | NFC refuses at runtime | Profile lacks the NFC entitlement → Step 2's check, request a new profile |
 | "Build number already exists" | Two builds raced — `eas build:cancel`, rebuild; autoIncrement picks the next number |

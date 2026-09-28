@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#FFFFFF",
     "ios": {
-      "bundleIdentifier": "com.mianu.paymentapp",
+      "bundleIdentifier": "com.mianu.organize",
       "supportsTablet": false,
       "infoPlist": {
         "NFCReaderUsageDescription": "MIANU badges carry an NFC chip. The app reads the chip to check badges in and out and to serve meals.",
@@ -46,7 +46,7 @@
       }
     },
     "android": {
-      "package": "com.mianu.paymentapp",
+      "package": "com.mianu.organize",
       "permissions": [
         "android.permission.NFC",
         "android.permission.ACCESS_COARSE_LOCATION",
