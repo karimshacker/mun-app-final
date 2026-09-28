@@ -146,6 +146,10 @@ to testers (paid account), see **[docs/TESTFLIGHT_GUIDE.md](./docs/TESTFLIGHT_GU
 EAS cloud builds + TestFlight to 30 iPhones with NFC. Prefer to skip the
 App Store Connect API key entirely and authenticate with just your Apple ID?
 Use **[docs/TESTFLIGHT_NO_API_KEY.md](./docs/TESTFLIGHT_NO_API_KEY.md)**.
+Have the credentials from a paid team's account holder (cert, profile, ASC
+record, API key)? Follow
+**[docs/TESTFLIGHT_SETUP_README.md](./docs/TESTFLIGHT_SETUP_README.md)** —
+the exact setup used for the organizer app's TestFlight deployment.
 Working without a paid Apple account at all? CI builds **unsigned .ipa**
 artifacts (Actions → ios-unsigned-ipa) that free-Apple-ID sideloaders sign —
 see **[docs/IOS_SIDELOAD_GUIDE.md](./docs/IOS_SIDELOAD_GUIDE.md)**, including

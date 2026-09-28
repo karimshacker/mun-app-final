@@ -20,9 +20,6 @@
           "TAG"
         ]
       },
-      "associatedDomains": [
-        "applinks:mianu-sm-iv.local"
-      ],
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {

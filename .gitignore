@@ -20,6 +20,14 @@ build/
 *.local
 # Staff PINs — generated out-of-band, never committed
 .staff-credentials.txt
+# Apple signing & upload credentials — provided out-of-band, never committed
+.secrets/apple/
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.pem
 
 # Native
 ios/

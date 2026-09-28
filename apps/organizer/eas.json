@@ -31,6 +31,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "FILL_ME_ASC_APP_ID",
+        "ascApiKeyPath": "../../.secrets/apple/AuthKey.p8",
+        "ascApiKeyIssuerId": "FILL_ME_ISSUER_ID",
+        "ascApiKeyId": "FILL_ME_KEY_ID"
+      }
+    }
   }
 }
