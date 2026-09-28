@@ -111,8 +111,11 @@ upload both files from the account holder through EAS's bulk channel instead:
 }
 ```
 
-2. `npx eas-cli credentials:push --platform ios` → uploads cert + profile
-   together → delete the local `credentials.json` afterwards.
+2. `npx eas-cli credentials --platform ios` → top menu →
+   **credentials.json: Upload/Download credentials…** → **Upload credentials
+   from credentials.json to EAS servers** (reads the file from the current
+   directory; no Apple authentication involved) → delete the local
+   `credentials.json` afterwards — the p12 password is inside it.
 3. Verify with `npx eas-cli credentials --platform ios`: both rows show ✓.
 
 The profile must be the paid team's App Store profile for
