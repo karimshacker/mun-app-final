@@ -87,6 +87,40 @@ openssl smime -inform DER -verify -nosigs -noverify \
 grep -A3 "nfc.readersession" /tmp/pp.plist
 ```
 
+### Route B — no Apple access at all: `credentials.json`
+
+If profile creation keeps demanding an Apple-ID login (e.g. only the
+distribution cert was imported first, and the login available has no team),
+upload both files from the account holder through EAS's bulk channel instead:
+
+1. Write a `credentials.json` in the **app directory** (`apps/organizer/`,
+   gitignored):
+
+```json
+{
+  "ios": {
+    "distributionCertificate": {
+      "path": "../../.secrets/apple/apple.p12",
+      "password": "<the p12 export password>"
+    },
+    "provisioningProfile": {
+      "path": "../../.secrets/apple/MIANUOrganizer.mobileprovision",
+      "distributionType": "app-store"
+    }
+  }
+}
+```
+
+2. `npx eas-cli credentials:push --platform ios` → uploads cert + profile
+   together → delete the local `credentials.json` afterwards.
+3. Verify with `npx eas-cli credentials --platform ios`: both rows show ✓.
+
+The profile must be the paid team's App Store profile for
+`com.mianu.paymentapp` **with the NFC entitlement** (check it first with the
+openssl one-liner above). EAS will use these files as-is; it will not be able
+to auto-renew an imported profile when it expires — ask the account holder
+for a fresh one before this profile lapses.
+
 ## Step 3 — Fill the identifiers in `apps/organizer/eas.json`
 
 Three values go into the `submit.production.ios` block (placeholders are

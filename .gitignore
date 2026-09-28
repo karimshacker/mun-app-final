@@ -28,6 +28,7 @@ build/
 *.mobileprovision
 *.provisionprofile
 *.pem
+credentials.json
 
 # Native
 ios/

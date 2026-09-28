@@ -34,9 +34,9 @@
     "production": {
       "ios": {
         "ascAppId": "FILL_ME_ASC_APP_ID",
-        "ascApiKeyPath": "../../.secrets/apple/AuthKey.p8",
-        "ascApiKeyIssuerId": "FILL_ME_ISSUER_ID",
-        "ascApiKeyId": "FILL_ME_KEY_ID"
+        "ascApiKeyPath": "../../.secrets/apple/AuthKey_CNL88D4W5V.p8",
+        "ascApiKeyIssuerId": "f458a0dc-007e-4a1b-88d9-40b42981095d",
+        "ascApiKeyId": "CNL88D4W5V"
       }
     }
   }
