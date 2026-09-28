@@ -1,0 +1,93 @@
+name: ios-unsigned-ipa
+
+# Builds UNSIGNED .ipa archives for both apps on a macOS GitHub runner.
+# Unsigned artifacts are the input format for every sideloading tool
+# (Dadoum's Sideloader/Provision, Sideloadly, SideStore, AltStore): those
+# tools inject their own free-Apple-ID credentials and entitlements at sign
+# time, so the archive must NOT be pre-signed — EAS cannot produce this.
+#
+# The API URL is baked at bundle time (EXPO_PUBLIC_API_URL). NFC entitlements
+# are decided when the sideloader signs (see docs/IOS_SIDELOAD_GUIDE.md):
+# the entitlements file inside the archive already declares the NFC formats,
+# so a signer that provisions NFC on a free team will honor it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - '.github/workflows/ios-unsigned-ipa.yml'
+      - 'pnpm-lock.yaml'
+      - '.npmrc'
+
+concurrency:
+  group: ios-unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_API_URL: https://mianu-api.karimshacker1234.workers.dev
+
+jobs:
+  ipa:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm i -g pnpm@9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build organizer unsigned ipa
+        working-directory: apps/organizer
+        run: |
+          npx expo prebuild --platform ios --no-install
+          xcodebuild \
+            -workspace ios/MIANUOrganizer.xcworkspace \
+            -scheme MIANUOrganizer \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MIANUOrganizer.xcarchive \
+            archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          mkdir -p build/Payload
+          cp -R build/MIANUOrganizer.xcarchive/Products/Applications/MIANUOrganizer.app build/Payload/
+          cd build && zip -qry mianu-organizer-unsigned.ipa Payload
+
+      - name: Build admin unsigned ipa
+        working-directory: apps/admin
+        run: |
+          npx expo prebuild --platform ios --no-install
+          xcodebuild \
+            -workspace ios/MIANUITAdmin.xcworkspace \
+            -scheme MIANUITAdmin \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MIANUITAdmin.xcarchive \
+            archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          mkdir -p build/Payload
+          cp -R build/MIANUITAdmin.xcarchive/Products/Applications/MIANUITAdmin.app build/Payload/
+          cd build && zip -qry mianu-admin-unsigned.ipa Payload
+
+      - name: Upload organizer unsigned ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: mianu-organizer-ios-unsigned
+          path: apps/organizer/build/mianu-organizer-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload admin unsigned ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: mianu-admin-ios-unsigned
+          path: apps/admin/build/mianu-admin-unsigned.ipa
+          if-no-files-found: error

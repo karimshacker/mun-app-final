@@ -109,12 +109,25 @@ export async function readBadgeUid(): Promise<NfcRead> {
 
   let techName: string | null = null;
   try {
-    const tech = await Promise.race([
-      NfcManager.requestTechnology(TECHS),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new NfcTimeoutError()), READ_TIMEOUT_MS),
-      ),
-    ]);
+    let tech: string;
+    try {
+      tech = await Promise.race([
+        NfcManager.requestTechnology(TECHS),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new NfcTimeoutError()), READ_TIMEOUT_MS),
+        ),
+      ]);
+    } catch (e) {
+      // Free-signed installs (personal Apple ID via Xcode or a sideloader
+      // like Dadoum's) lack the NFC Tag Reading entitlement: CoreNFC refuses
+      // the session with "Missing Entitlement". Normalize every such hardware
+      // refusal to NfcUnavailableError so screens fall back to the typed alt
+      // code instead of surfacing a raw scan failure.
+      if (e instanceof NfcTimeoutError) throw e;
+      throw new NfcUnavailableError(
+        e instanceof Error ? e.message : 'nfc_start_failed',
+      );
+    }
     techName = String(tech);
 
     // NDEF wraps the real tag: drill through getNdefTag() if present.
