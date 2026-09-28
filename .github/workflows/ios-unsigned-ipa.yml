@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Select Xcode 26 (an SPM dependency needs Swift tools 6.2)
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
       - name: Build organizer unsigned ipa
         working-directory: apps/organizer
         run: |
