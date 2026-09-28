@@ -33,7 +33,7 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "FILL_ME_ASC_APP_ID",
+        "ascAppId": "6816827379",
         "ascApiKeyPath": "../../.secrets/apple/AuthKey_CNL88D4W5V.p8",
         "ascApiKeyIssuerId": "f458a0dc-007e-4a1b-88d9-40b42981095d",
         "ascApiKeyId": "CNL88D4W5V"
