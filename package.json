@@ -16,5 +16,10 @@
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "expo-modules-jsi@57.1.1": "patches/expo-modules-jsi@57.1.1.patch"
+    }
   }
 }
