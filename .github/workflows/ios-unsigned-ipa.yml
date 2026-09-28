@@ -49,7 +49,7 @@ jobs:
       - name: Build organizer unsigned ipa
         working-directory: apps/organizer
         run: |
-          npx expo prebuild --platform ios --no-install
+          npx expo prebuild --platform ios
           xcodebuild \
             -workspace ios/MIANUOrganizer.xcworkspace \
             -scheme MIANUOrganizer \
@@ -65,7 +65,7 @@ jobs:
       - name: Build admin unsigned ipa
         working-directory: apps/admin
         run: |
-          npx expo prebuild --platform ios --no-install
+          npx expo prebuild --platform ios
           xcodebuild \
             -workspace ios/MIANUITAdmin.xcworkspace \
             -scheme MIANUITAdmin \
