@@ -79,10 +79,13 @@ grep -A3 "nfc.readersession" /tmp/pp.plist
 Expected: `com.apple.developer.nfc.readersession.formats` with `NDEF`/`TAG`.
 If it's missing, the App ID needs the *Near Field Communication Tag Reading*
 capability enabled and a **new profile generated** — go back to the account
-holder. (Linux/Windows instead of macOS: open the `.mobileprovision` in a
-text editor and search for `nfc.readersession` — it's CMS-encoded, so use
-`python3 -c` + `subprocess`/openssl, or just ask the account holder to
-confirm the capability is on.)
+holder. Linux/Windows instead of macOS (`security` is Apple-only):
+
+```bash
+openssl smime -inform DER -verify -nosigs -noverify \
+  -in .secrets/apple/MIANUOrganizer.mobileprovision -out /tmp/pp.plist
+grep -A3 "nfc.readersession" /tmp/pp.plist
+```
 
 ## Step 3 — Fill the identifiers in `apps/organizer/eas.json`
 
