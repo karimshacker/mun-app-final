@@ -100,31 +100,45 @@ export function StationScreen({ onPick }: { onPick: (choice: StationChoice) => v
         <Card>
           <Eyebrow>Halls</Eyebrow>
           {error ? <Text style={styles.hint}>{error}</Text> : null}
-          {(committees ?? []).map((c, i) => (
+          {(committees ?? [])
+            // Venue-wide committees (MEDIA, IT, ORGANISATION, …) carry an
+            // empty hall_name: they are people groups, not rooms, so they get
+            // no door stations — delegates seat themselves in a real hall.
+            .filter((c) => c.hallName.trim().length > 0)
+            .map((c, i, halls) => {
+            // A hall shared by two committees reads "HALL 1 · AG1"; a solo room
+            // like the fête (name == hallName) would render "FÊTE · FÊTE",
+            // so collapse the two when they match.
+            const hallTitle =
+              c.name.trim().toUpperCase() === c.hallName.trim().toUpperCase()
+                ? c.hallName.toUpperCase()
+                : `${c.hallName.toUpperCase()} · ${c.name}`;
+            return (
             <View key={c.id}>
               <Row
-                label={`${c.hallName.toUpperCase()} · ${c.name} · IN`}
+                label={`${hallTitle} · IN`}
                 onPress={() =>
                   onPick({
                     stationType: 'HALL_IN',
                     committeeId: c.id,
-                    stationLabel: `${c.hallName.toUpperCase()} · ${c.name}`,
+                    stationLabel: hallTitle,
                   })
                 }
               />
               <Row
-                label={`${c.hallName.toUpperCase()} · OUT`}
+                label={`${hallTitle} · OUT`}
                 onPress={() =>
                   onPick({
                     stationType: 'HALL_OUT',
                     committeeId: c.id,
-                    stationLabel: `${c.hallName.toUpperCase()} · CHECK-OUT`,
+                    stationLabel: `${hallTitle} · CHECK-OUT`,
                   })
                 }
-                last={i === (committees?.length ?? 0) - 1}
+                last={i === halls.length - 1}
               />
             </View>
-          ))}
+            );
+          })}
         </Card>
       </View>
     </Screen>

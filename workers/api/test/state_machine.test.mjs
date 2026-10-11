@@ -68,8 +68,8 @@ check('lunch denied with no meal plan',
   decideScan(MEAL(inConf, { meal_plan: 'NONE' })).outcome, 'MEAL_NOT_IN_PLAN');
 check('breakfast allowed on breakfast-only plan',
   decideScan({ ...MEAL(inConf), mealType: 'BREAKFAST', participant: P({ meal_plan: 'BREAKFAST_ONLY' }) }).outcome, 'MEAL_SERVED');
-check('meal denied at zero balance',
-  decideScan(MEAL(inConf, { balance_cents: 0 })).outcome, 'INSUFFICIENT_BALANCE');
+check('zero balance does not block while meals cost nothing (MEAL_COST_CENTS = 0)',
+  decideScan(MEAL(inConf, { balance_cents: 0 })).outcome, 'MEAL_SERVED');
 check('meal denied for a blocked participant',
   decideScan(MEAL(inConf, { status: 'BLOCKED' })).outcome, 'BLOCKED');
 

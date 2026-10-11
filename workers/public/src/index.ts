@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 
@@ -23,6 +24,19 @@ interface Env {
 import waterApiDoc from '../../../docs/WATER_API.md';
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Browser-based dashboards (e.g. the pages.dev site) POST here cross-origin,
+// so preflights must be answered. CORS is a browser-only gate and the
+// endpoint is unauthenticated anyway — it adds no protection, only access.
+app.use(
+  '*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type'],
+    maxAge: 86400,
+  }),
+);
 
 const ORDER_PREFIX = 'WO-';
 

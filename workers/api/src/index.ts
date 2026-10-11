@@ -651,9 +651,12 @@ function decideScan(args: DecideArgs): DecideResult {
       if (slotTaken) return no('MEAL_ALREADY_SERVED');
       if (day < 1 || day > days) return no('MEAL_DAY_CLOSED');
 
-      // Real balance check happens in SQL inside the transaction; this is the
-      // fast pre-check so the device shows a reason without a round trip.
-      if (participant.balance_cents <= 0) return no('INSUFFICIENT_BALANCE');
+      // Balance only gates a meal that actually costs something: with
+      // MEAL_COST_CENTS = 0 nothing is ever deducted, so a 0.00 balance must
+      // not block service (it would block forever — the balance never
+      // changes). When phase-3 pricing lands this pre-check bites again; the
+      // batch below must then also gain a SQL-side balance guard.
+      if (MEAL_COST_CENTS > 0 && participant.balance_cents <= 0) return no('INSUFFICIENT_BALANCE');
 
       return {
         outcome: 'MEAL_SERVED',

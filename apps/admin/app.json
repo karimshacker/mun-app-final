@@ -16,7 +16,6 @@
       },
       "entitlements": {
         "com.apple.developer.nfc.readersession.formats": [
-          "NDEF",
           "TAG"
         ]
       },
@@ -37,10 +36,6 @@
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
             "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
-          },
-          {
-            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryActiveKeyboard",
-            "NSPrivacyAccessedAPITypeReasons": ["3B52.1"]
           }
         ]
       }

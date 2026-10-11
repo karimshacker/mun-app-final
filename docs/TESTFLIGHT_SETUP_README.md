@@ -84,7 +84,9 @@ security cms -D -i .secrets/apple/MIANUOrganizer.mobileprovision > /tmp/pp.plist
 grep -A3 "nfc.readersession" /tmp/pp.plist
 ```
 
-Expected: `com.apple.developer.nfc.readersession.formats` with `NDEF`/`TAG`.
+Expected: `com.apple.developer.nfc.readersession.formats` with `TAG` (modern
+SDKs reject `NDEF` at upload with ITMS-90778 — `NDEF` was removed from
+app.json; `TAG` alone reads UIDs fine).
 If it's missing, the App ID needs the *Near Field Communication Tag Reading*
 capability enabled and a **new profile generated** — go back to the account
 holder. Linux/Windows instead of macOS (`security` is Apple-only):
